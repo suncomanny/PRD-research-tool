@@ -77,19 +77,19 @@ intro_lines = [
     ("  Electrical performance targets: voltage, wattage, color temperature, CRI,", instr_body),
     ("  lumens output, dimming, driver type. Mark selectable fields Yes/No.", instr_body),
     ("", instr_body),
-    ("PHYSICAL / MECHANICAL (Columns V\u2013AC)", instr_bold),
+    ("PHYSICAL / MECHANICAL (Columns V\u2013AD)", instr_bold),
     ("  Form factor, mounting, materials, finish, IP/moisture ratings,", instr_body),
-    ("  indoor/outdoor suitability, and operating temperature range.", instr_body),
+    ("  indoor/outdoor suitability, operating temperature, and wiring type.", instr_body),
     ("", instr_body),
-    ("FEATURES & REQUIREMENTS (Columns AD\u2013AO)", instr_bold),
+    ("FEATURES & REQUIREMENTS (Columns AE\u2013AP)", instr_bold),
     ("  Special features: emergency battery, motion sensor, daylight sensor,", instr_body),
     ("  smart connectivity, linkability, bulb type, and beam angle.", instr_body),
     ("", instr_body),
-    ("BUSINESS TARGETS (Columns AP\u2013AV)", instr_bold),
+    ("BUSINESS TARGETS (Columns AQ\u2013AW)", instr_bold),
     ("  Pricing targets (MSRP, margin, vendor cost), certifications,", instr_body),
     ("  rated lifetime, and warranty period.", instr_body),
     ("", instr_body),
-    ("RESEARCH GUIDANCE (Columns AW\u2013AY)", instr_bold),
+    ("RESEARCH GUIDANCE (Columns AX\u2013AZ)", instr_bold),
     ("  Known competitors to benchmark, priority sales channels, and any", instr_body),
     ("  additional notes or context for the research tool.", instr_body),
     ("", instr_body),
@@ -123,10 +123,10 @@ ws.sheet_properties.tabColor = DARK_BLUE
 sections = [
     ("IDENTITY", "A", "F"),
     ("CORE ELECTRICAL SPECS", "G", "U"),
-    ("PHYSICAL / MECHANICAL", "V", "AC"),
-    ("FEATURES & REQUIREMENTS", "AD", "AO"),
-    ("BUSINESS TARGETS", "AP", "AV"),
-    ("RESEARCH GUIDANCE", "AW", "AY"),
+    ("PHYSICAL / MECHANICAL", "V", "AD"),
+    ("FEATURES & REQUIREMENTS", "AE", "AP"),
+    ("BUSINESS TARGETS", "AQ", "AW"),
+    ("RESEARCH GUIDANCE", "AX", "AZ"),
 ]
 
 # ── Column definitions (col_letter, header_text, is_required) ────────
@@ -163,31 +163,32 @@ columns = [
     ("AA", "Moisture Rating", False),
     ("AB", "Indoor/Outdoor Use", False),
     ("AC", "Operating Temperature", False),
+    ("AD", "Wiring Type", False),
     # FEATURES & REQUIREMENTS
-    ("AD", "Emergency / Battery?", False),
-    ("AE", "Run Time", False),
-    ("AF", "Charge Time", False),
-    ("AG", "Switching Time", False),
-    ("AH", "Motion Sensor?", False),
-    ("AI", "Motion Duration", False),
-    ("AJ", "Daylight Sensor / Auto-Dimming?", False),
-    ("AK", "Smart / Connected?", False),
-    ("AL", "Linkable?", False),
-    ("AM", "Bulb Base Type", False),
-    ("AN", "Bulb Shape", False),
-    ("AO", "Beam Angle", False),
+    ("AE", "Emergency / Battery?", False),
+    ("AF", "Run Time", False),
+    ("AG", "Charge Time", False),
+    ("AH", "Switching Time", False),
+    ("AI", "Motion Sensor?", False),
+    ("AJ", "Motion Duration", False),
+    ("AK", "Daylight Sensor / Auto-Dimming?", False),
+    ("AL", "Smart / Connected?", False),
+    ("AM", "Linkable?", False),
+    ("AN", "Bulb Base Type", False),
+    ("AO", "Bulb Shape", False),
+    ("AP", "Beam Angle", False),
     # BUSINESS TARGETS
-    ("AP", "Target MSRP", False),
-    ("AQ", "Target Margin % (Shopify)", False),
-    ("AR", "Target Margin % (Amazon)", False),
-    ("AS", "Target Vendor Cost", False),
-    ("AT", "Certifications", False),
-    ("AU", "Lifetime Hours", False),
-    ("AV", "Warranty", False),
+    ("AQ", "Target MSRP", False),
+    ("AR", "Target Margin % (Shopify)", False),
+    ("AS", "Target Margin % (Amazon)", False),
+    ("AT", "Target Vendor Cost", False),
+    ("AU", "Certifications", False),
+    ("AV", "Lifetime Hours", False),
+    ("AW", "Warranty", False),
     # RESEARCH GUIDANCE
-    ("AW", "Known Competitors", False),
-    ("AX", "Priority Channels", False),
-    ("AY", "Research Notes", False),
+    ("AX", "Known Competitors", False),
+    ("AY", "Priority Channels", False),
+    ("AZ", "Research Notes", False),
 ]
 
 # ── Column widths by section ────────────────────────────────────────────
@@ -242,14 +243,14 @@ for col_let, header_text, required in columns:
     cell.border = thin_border
 
 # ── Auto-filter on row 2 ───────────────────────────────────────────────
-last_col_letter = "AY"
+last_col_letter = "AZ"
 ws.auto_filter.ref = f"A2:{last_col_letter}2"
 
 # ── Freeze panes: freeze rows 1-2 and columns A-C ─────────────────────
 ws.freeze_panes = "D3"
 
 # ── Alternating row fills (rows 3-102) ─────────────────────────────────
-max_col = col_index("AY")
+max_col = col_index("AZ")
 for row_num in range(3, 103):
     fill = alt_fill if row_num % 2 == 0 else white_fill
     for c in range(1, max_col + 1):
@@ -277,14 +278,15 @@ validations = {
     "Z": "None/NA,IP20,IP40,IP44,IP54,IP65,IP66,IP67,IP69K",
     "AA": "Dry,Damp,Wet",
     "AB": "Indoor,Outdoor,Indoor/Outdoor",
-    "AD": "Yes,No",
-    "AH": "Yes,No",
-    "AJ": "Yes,No",
+    "AD": "Hardwired,Plug and Play,Both",
+    "AE": "Yes,No",
+    "AI": "Yes,No",
     "AK": "Yes,No",
     "AL": "Yes,No",
-    "AM": "E12,E26,E39,G5,G13,G24q,GU10,GU24,GU5.3,MR-16,Integrated LED,N/A,Other",
-    "AV": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
-    "AX": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
+    "AM": "Yes,No",
+    "AN": "E12,E26,E39,G5,G13,G24q,GU10,GU24,GU5.3,MR-16,Integrated LED,N/A,Other",
+    "AW": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
+    "AY": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
 }
 
 for col_let, formula_list in validations.items():
@@ -336,28 +338,29 @@ example = {
     "AA": "Dry",
     "AB": "Indoor",
     "AC": "-20\u00b0C to 45\u00b0C",
-    "AD": "No",
-    "AE": "",
+    "AD": "Hardwired",
+    "AE": "No",
     "AF": "",
     "AG": "",
-    "AH": "No",
-    "AI": "",
-    "AJ": "No",
+    "AH": "",
+    "AI": "No",
+    "AJ": "",
     "AK": "No",
     "AL": "No",
-    "AM": "Integrated LED",
-    "AN": "",
-    "AO": "120\u00b0",
-    "AP": "$49.99",
-    "AQ": "45%",
-    "AR": "35%",
-    "AS": "$18.00",
-    "AT": "UL, DLC, FCC, Energy Star",
-    "AU": "50,000",
-    "AV": "7-Year",
-    "AW": "Metalux, Lithonia, TCP",
-    "AX": "Amazon",
-    "AY": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
+    "AM": "No",
+    "AN": "Integrated LED",
+    "AO": "",
+    "AP": "120\u00b0",
+    "AQ": "$49.99",
+    "AR": "45%",
+    "AS": "35%",
+    "AT": "$18.00",
+    "AU": "UL, DLC, FCC, Energy Star",
+    "AV": "50,000",
+    "AW": "7-Year",
+    "AX": "Metalux, Lithonia, TCP",
+    "AY": "Amazon",
+    "AZ": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
 }
 
 for col_let, value in example.items():
