@@ -89,15 +89,58 @@ intro_lines = [
     ("  Pricing targets (MSRP, margin), cost type (Landed/DDP/DAP),", instr_body),
     ("  vendor cost, certifications, rated lifetime, and warranty.", instr_body),
     ("", instr_body),
-    ("RESEARCH GUIDANCE (Columns AY\u2013BA)", instr_bold),
-    ("  Known competitors to benchmark, priority sales channels, and any", instr_body),
-    ("  additional notes or context for the research tool.", instr_body),
+    ("RESEARCH GUIDANCE (Columns AY\u2013BB)", instr_bold),
+    ("  Known competitors to benchmark, priority sales channels, Stackline", instr_body),
+    ("  Data toggle (Yes/No), and additional notes for the research tool.", instr_body),
     ("", instr_body),
     ("TIPS:", instr_heading),
     ("  \u2022 Fill in what you know \u2014 leave unknown fields blank for auto-lookup.", instr_body),
     ("  \u2022 Use the dropdown menus for standardized fields.", instr_body),
     ("  \u2022 The Reference SKU drives the data lookup \u2014 make sure it\u2019s accurate.", instr_body),
     ("  \u2022 Row 3 contains an example entry you can overwrite.", instr_body),
+    ("", instr_body),
+    ("", instr_body),
+    ("STACKLINE DATA (Optional):", instr_heading),
+    ("", instr_body),
+    ("  If you have Stackline Atlas data for the category you\u2019re researching,", instr_body),
+    ("  you can include it to enrich the competitive analysis with Amazon market", instr_body),
+    ("  intelligence (competitor sales, pricing trends, ad spend, traffic data).", instr_body),
+    ("", instr_body),
+    ("  How to use:", instr_bold),
+    ("", instr_body),
+    ("  Step 1: Export from Stackline Atlas", instr_bold),
+    ("    a. Log in to Stackline Atlas (atlas.stackline.com)", instr_body),
+    ("    b. Navigate to the relevant product segment for your category", instr_body),
+    ("    c. Set the date range to the most recent period (last 12 months recommended)", instr_body),
+    ("    d. Click Export \u2192 Download CSV", instr_body),
+    ("    e. You will get two files:", instr_body),
+    ('      \u2022 Sales data file (contains "_all_" in filename) \u2014 revenue, units, market share', instr_body),
+    ('      \u2022 Traffic data file (contains "_traffic_" in filename) \u2014 ad spend, clicks, conversion', instr_body),
+    ("", instr_body),
+    ("  Step 2: Rename the files using this convention", instr_bold),
+    ("    Format:  Stackline_[Category]_[YYYY-MM]_[type].csv", instr_body),
+    ("", instr_body),
+    ("    [Category] = The Category value from Column A (use exact spelling, replace spaces with _)", instr_body),
+    ("    [YYYY-MM]  = Year and month of the export (e.g., 2026-04)", instr_body),
+    ("    [type]     = sales  OR  traffic", instr_body),
+    ("", instr_body),
+    ("    Examples:", instr_bold),
+    ("      Stackline_Indoor_Commercial_2026-04_sales.csv", instr_body),
+    ("      Stackline_Indoor_Commercial_2026-04_traffic.csv", instr_body),
+    ("      Stackline_Outdoor_Fixtures_2026-04_sales.csv", instr_body),
+    ("      Stackline_Outdoor_Fixtures_2026-04_traffic.csv", instr_body),
+    ("", instr_body),
+    ("  Step 3: Upload to SharePoint", instr_bold),
+    ("    Upload both files to:", instr_body),
+    ("      Manny Tools / PRD Research Tool / Stackline Data /", instr_body),
+    ("", instr_body),
+    ("  Step 4: Mark \u201cYes\u201d in the Stackline Data? column (Column BA)", instr_bold),
+    ("    Set the dropdown to \u201cYes\u201d for each ideation row where you want", instr_body),
+    ("    the research tool to incorporate Stackline data. The tool will", instr_body),
+    ("    automatically find the newest matching file for the category.", instr_body),
+    ("", instr_body),
+    ("  Note: If multiple exports exist for the same category, the tool picks", instr_body),
+    ("  the most recent one based on the YYYY-MM date in the filename.", instr_body),
 ]
 
 for text, font in intro_lines:
@@ -126,7 +169,7 @@ sections = [
     ("PHYSICAL / MECHANICAL", "V", "AD"),
     ("FEATURES & REQUIREMENTS", "AE", "AP"),
     ("BUSINESS TARGETS", "AQ", "AX"),
-    ("RESEARCH GUIDANCE", "AY", "BA"),
+    ("RESEARCH GUIDANCE", "AY", "BB"),
 ]
 
 # ── Column definitions (col_letter, header_text, is_required) ────────
@@ -189,7 +232,8 @@ columns = [
     # RESEARCH GUIDANCE
     ("AY", "Known Competitors", False),
     ("AZ", "Priority Channels", False),
-    ("BA", "Research Notes", False),
+    ("BA", "Stackline Data?", False),
+    ("BB", "Research Notes", False),
 ]
 
 # ── Column widths by section ────────────────────────────────────────────
@@ -244,14 +288,14 @@ for col_let, header_text, required in columns:
     cell.border = thin_border
 
 # ── Auto-filter on row 2 ───────────────────────────────────────────────
-last_col_letter = "BA"
+last_col_letter = "BB"
 ws.auto_filter.ref = f"A2:{last_col_letter}2"
 
 # ── Freeze panes: freeze rows 1-2 and columns A-C ─────────────────────
 ws.freeze_panes = "D3"
 
 # ── Alternating row fills (rows 3-102) ─────────────────────────────────
-max_col = col_index("BA")
+max_col = col_index("BB")
 for row_num in range(3, 103):
     fill = alt_fill if row_num % 2 == 0 else white_fill
     for c in range(1, max_col + 1):
@@ -289,6 +333,7 @@ validations = {
     "AT": "Landed,DDP,DAP,FOB",
     "AX": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
     "AZ": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
+    "BA": "Yes,No",
 }
 
 for col_let, formula_list in validations.items():
@@ -363,7 +408,8 @@ example = {
     "AX": "7-Year",
     "AY": "Metalux, Lithonia, TCP",
     "AZ": "Amazon",
-    "BA": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
+    "BA": "Yes",
+    "BB": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
 }
 
 for col_let, value in example.items():
