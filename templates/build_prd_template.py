@@ -286,7 +286,7 @@ validations = {
     "AL": "Yes,No",
     "AM": "Yes,No",
     "AN": "E12,E26,E39,G5,G13,G24q,GU10,GU24,GU5.3,MR-16,Integrated LED,N/A,Other",
-    "AT": "Landed,DDP,DAP",
+    "AT": "Landed,DDP,DAP,FOB",
     "AX": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
     "AZ": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
 }
