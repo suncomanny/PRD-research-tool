@@ -28,6 +28,9 @@ planStatus:
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
 | **Runtime** | Node.js (matching PRD Generator pattern: `xlsx` + `docx` npm packages + SharePoint Graph API) |
+| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool reads from local sync folder when "Stackline Data?" = Yes |
+| **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\` |
+| **Stackline naming convention** | `Stackline_[Category]_[YYYY-MM]_[type].csv` (type = sales or traffic) |
 
 ---
 
@@ -47,10 +50,18 @@ planStatus:
 
 ```
 SharePoint: Manny Tools/
-├── PRD Research Template.xlsx           ← PM FILLS THIS (one row per ideation)
-├── Research Reports/
-│   └── [Category] Research [Date].xlsx  ← TOOL OUTPUTS (one sheet per ideation)
-└── PRD Generator Template.xlsx          ← EXISTING (PM fills next, informed by research)
+├── PRD Research/
+│   ├── PRD Research Template.xlsx           ← PM FILLS THIS (one row per ideation)
+│   ├── Research Reports/
+│   │   └── [Category] Research [Date].xlsx  ← TOOL OUTPUTS (one sheet per ideation)
+│   └── Stackline Data/                      ← PM UPLOADS ATLAS EXPORTS HERE
+│       ├── Stackline_Indoor_Commercial_2026-04_sales.csv
+│       └── Stackline_Indoor_Commercial_2026-04_traffic.csv
+├── PRD Generator Template.xlsx              ← EXISTING (PM fills next, informed by research)
+└── Generated PRDs/                          ← EXISTING PRD outputs
+
+Local sync: C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\
+  (tool reads Stackline files from local sync — no Graph API needed for read)
 ```
 
 **Flow:**
@@ -148,6 +159,7 @@ SharePoint: Manny Tools/
 |--------|-------------|-----------|
 | Known Competitors | Specific competitor products to compare | Optional |
 | Priority Channels | Amazon, Home Depot, Walmart, Direct | Optional |
+| Stackline Data? | Yes/No — triggers lookup for Stackline Atlas CSV in SharePoint | Optional |
 | Research Notes | Context for the research tool | Optional |
 
 ---
@@ -223,6 +235,13 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] WebFetch known competitor sites (Duralec, Amico, NuWatt, Maxxima, 1000Bulbs, NSL USA)
 - [ ] Collect: pricing, specs, ratings, review counts, URLs
 - [ ] Split: Amazon vs brick-and-mortar
+- [ ] **Stackline integration:** If row has "Stackline Data? = Yes":
+  - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\`
+  - Match files by category name: `Stackline_[Category]_*.csv`
+  - Pick newest by YYYY-MM date in filename
+  - Parse `_sales` CSV for: competitor revenue, units, market share, pricing
+  - Parse `_traffic` CSV for: ad spend, clicks, conversion rates
+  - Merge into competitive analysis
 - [ ] Git checkpoint: "Step 4 - Research engine working"
 
 ### Step 5: Analysis & Recommendations Generator
