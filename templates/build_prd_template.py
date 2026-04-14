@@ -85,11 +85,11 @@ intro_lines = [
     ("  Special features: emergency battery, motion sensor, daylight sensor,", instr_body),
     ("  smart connectivity, linkability, bulb type, and beam angle.", instr_body),
     ("", instr_body),
-    ("BUSINESS TARGETS (Columns AQ\u2013AW)", instr_bold),
-    ("  Pricing targets (MSRP, margin, vendor cost), certifications,", instr_body),
-    ("  rated lifetime, and warranty period.", instr_body),
+    ("BUSINESS TARGETS (Columns AQ\u2013AX)", instr_bold),
+    ("  Pricing targets (MSRP, margin), cost type (Landed/DDP/DAP),", instr_body),
+    ("  vendor cost, certifications, rated lifetime, and warranty.", instr_body),
     ("", instr_body),
-    ("RESEARCH GUIDANCE (Columns AX\u2013AZ)", instr_bold),
+    ("RESEARCH GUIDANCE (Columns AY\u2013BA)", instr_bold),
     ("  Known competitors to benchmark, priority sales channels, and any", instr_body),
     ("  additional notes or context for the research tool.", instr_body),
     ("", instr_body),
@@ -125,8 +125,8 @@ sections = [
     ("CORE ELECTRICAL SPECS", "G", "U"),
     ("PHYSICAL / MECHANICAL", "V", "AD"),
     ("FEATURES & REQUIREMENTS", "AE", "AP"),
-    ("BUSINESS TARGETS", "AQ", "AW"),
-    ("RESEARCH GUIDANCE", "AX", "AZ"),
+    ("BUSINESS TARGETS", "AQ", "AX"),
+    ("RESEARCH GUIDANCE", "AY", "BA"),
 ]
 
 # ── Column definitions (col_letter, header_text, is_required) ────────
@@ -181,14 +181,15 @@ columns = [
     ("AQ", "Target MSRP", False),
     ("AR", "Target Margin % (Shopify)", False),
     ("AS", "Target Margin % (Amazon)", False),
-    ("AT", "Target Vendor Cost", False),
-    ("AU", "Certifications", False),
-    ("AV", "Lifetime Hours", False),
-    ("AW", "Warranty", False),
+    ("AT", "Cost Type", False),
+    ("AU", "Target Vendor Cost", False),
+    ("AV", "Certifications", False),
+    ("AW", "Lifetime Hours", False),
+    ("AX", "Warranty", False),
     # RESEARCH GUIDANCE
-    ("AX", "Known Competitors", False),
-    ("AY", "Priority Channels", False),
-    ("AZ", "Research Notes", False),
+    ("AY", "Known Competitors", False),
+    ("AZ", "Priority Channels", False),
+    ("BA", "Research Notes", False),
 ]
 
 # ── Column widths by section ────────────────────────────────────────────
@@ -243,14 +244,14 @@ for col_let, header_text, required in columns:
     cell.border = thin_border
 
 # ── Auto-filter on row 2 ───────────────────────────────────────────────
-last_col_letter = "AZ"
+last_col_letter = "BA"
 ws.auto_filter.ref = f"A2:{last_col_letter}2"
 
 # ── Freeze panes: freeze rows 1-2 and columns A-C ─────────────────────
 ws.freeze_panes = "D3"
 
 # ── Alternating row fills (rows 3-102) ─────────────────────────────────
-max_col = col_index("AZ")
+max_col = col_index("BA")
 for row_num in range(3, 103):
     fill = alt_fill if row_num % 2 == 0 else white_fill
     for c in range(1, max_col + 1):
@@ -285,8 +286,9 @@ validations = {
     "AL": "Yes,No",
     "AM": "Yes,No",
     "AN": "E12,E26,E39,G5,G13,G24q,GU10,GU24,GU5.3,MR-16,Integrated LED,N/A,Other",
-    "AW": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
-    "AY": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
+    "AT": "Landed,DDP,DAP",
+    "AX": "1-Year,2-Year,3-Year,5-Year,7-Year,10-Year,Lifetime",
+    "AZ": "Amazon,Home Depot,Walmart,Lowe's,Direct/Distributor,All",
 }
 
 for col_let, formula_list in validations.items():
@@ -354,13 +356,14 @@ example = {
     "AQ": "$49.99",
     "AR": "45%",
     "AS": "35%",
-    "AT": "$18.00",
-    "AU": "UL, DLC, FCC, Energy Star",
-    "AV": "50,000",
-    "AW": "7-Year",
-    "AX": "Metalux, Lithonia, TCP",
-    "AY": "Amazon",
-    "AZ": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
+    "AT": "Landed",
+    "AU": "$18.00",
+    "AV": "UL, DLC, FCC, Energy Star",
+    "AW": "50,000",
+    "AX": "7-Year",
+    "AY": "Metalux, Lithonia, TCP",
+    "AZ": "Amazon",
+    "BA": "High-output selectable wattage panel to replace PN24-2x4-30W line. Target DLC Premium for utility rebates.",
 }
 
 for col_let, value in example.items():
