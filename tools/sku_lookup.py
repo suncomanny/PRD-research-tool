@@ -90,6 +90,7 @@ def lookup_from_csv(sku: str) -> dict:
             "found": False,
             "image_url": None,
             "title": None,
+            "product_type": None,
             "handle": None,
         }
 
@@ -103,17 +104,18 @@ def lookup_from_csv(sku: str) -> dict:
     if pd.isna(handle):
         handle = None
 
-    # Use Title column if it exists, otherwise construct from handle
-    title = row.get('Title')
-    if pd.isna(title) if isinstance(title, float) else not title:
-        title = None
+    # Product type from CSV (e.g., "Panel Lights", "Vapor Tight")
+    product_type = row.get('Type')
+    if pd.isna(product_type) if isinstance(product_type, float) else not product_type:
+        product_type = None
 
     return {
         "sku": sku,
         "family": family,
         "found": True,
         "image_url": str(image_url) if image_url else None,
-        "title": str(title) if title else None,
+        "title": None,  # Title comes from Postgres (shopify_shopifyproduct.title)
+        "product_type": str(product_type) if product_type else None,
         "handle": str(handle) if handle else None,
     }
 

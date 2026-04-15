@@ -1,12 +1,16 @@
 # Step 2: Reference SKU Lightweight Lookup — Progress & Next Steps
 
-## Status: IN PROGRESS
+## Status: COMPLETE
 
 ## What's Done
 1. **Postgres MCP connected to Nimbalyst** — both `postgres` and `redshift` MCPs are configured and working
 2. **Database schema explored** — all key tables and joins mapped out
 3. **CSV lookup script written** — `tools/sku_lookup.py` handles metadata CSV image lookup + merge logic
 4. **Test queries validated** — confirmed sales, pricing, and title queries all work
+5. **End-to-end tested** with 3 SKUs across categories:
+   - `PN24_HO-4060K-1PK` (Panel) — image, title, $861K Shopify / $5.27M Amazon
+   - `WR_PR11-WH-4060K-1PK` (Wraparound) — image, title, $76K Shopify / $433K Amazon
+   - `VT8_90SW-GR-3550K-1PK` (Vapor Tight) — image, title, $62K Shopify / $857 Amazon
 
 ## Database Schema (Confirmed Working)
 
