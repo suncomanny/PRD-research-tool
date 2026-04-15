@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+from datetime import date
 
 import pandas as pd
 
@@ -173,19 +174,53 @@ MCP_QUERIES = {
 }
 
 
-def print_mcp_queries(sku: str):
-    """Print the MCP queries Claude should execute for this SKU."""
+def default_sales_window(anchor_date: date | None = None) -> tuple[str, str]:
+    """Return the last 12 complete calendar months as ISO date strings."""
+    anchor = anchor_date or date.today()
+    end_date = date(anchor.year, anchor.month, 1)
+    start_year = end_date.year - 1
+    start_date = date(start_year, end_date.month, 1)
+    return start_date.isoformat(), end_date.isoformat()
+
+
+def build_mcp_queries(
+    sku: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, str]:
+    """Build the Postgres MCP query strings for a SKU."""
     family = strip_pack_suffix(sku)
-    print("\n--- MCP Queries for Claude to execute ---")
+    resolved_start, resolved_end = (
+        (start_date, end_date)
+        if start_date and end_date
+        else default_sales_window()
+    )
+
+    queries = {}
     for name, query in MCP_QUERIES.items():
-        filled = query.format(
+        queries[name] = query.format(
             sku=sku,
             family=family,
-            start_date='2025-04-01',
-            end_date='2026-04-01',
-        )
+            start_date=resolved_start,
+            end_date=resolved_end,
+        ).strip()
+    return queries
+
+
+def print_mcp_queries(
+    sku: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """Print the MCP queries Claude should execute for this SKU."""
+    print("\n--- MCP Queries for Claude to execute ---")
+    for name, filled in build_mcp_queries(
+        sku=sku,
+        start_date=start_date,
+        end_date=end_date,
+    ).items():
         print(f"\n[{name}]")
-        print(filled.strip())
+        print(filled)
 
 
 def main():
@@ -195,6 +230,10 @@ def main():
                         help='JSON string with Postgres sales data to merge')
     parser.add_argument('--show-queries', action='store_true',
                         help='Print the MCP queries Claude should execute')
+    parser.add_argument('--start-date', type=str, default=None,
+                        help='Override MCP sales window start date (YYYY-MM-DD)')
+    parser.add_argument('--end-date', type=str, default=None,
+                        help='Override MCP sales window end date (YYYY-MM-DD)')
     args = parser.parse_args()
 
     # CSV lookup
@@ -209,7 +248,11 @@ def main():
     print(json.dumps(result, indent=2))
 
     if args.show_queries:
-        print_mcp_queries(args.sku)
+        print_mcp_queries(
+            args.sku,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
 
 
 if __name__ == '__main__':
