@@ -212,20 +212,36 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] Create PRD Research Template.xlsx with formatting, dropdowns, validation
 - [ ] Git checkpoint: "Step 1 - Ideation template created"
 
-### Step 2: Reference SKU Lookup Module
-**Goal:** Script that reads a Reference SKU and returns all known attributes
-- [ ] Query Redshift/Postgres MCP for vendor, cost, product data
-- [ ] Fallback to metadata/specs CSVs for fields not in DB
-- [ ] Handle Sunco-branded and internal vendor SKUs
+### Step 2: Reference SKU Lightweight Lookup
+**Goal:** Script that takes a Reference SKU and returns only what's needed — the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We only pull baseline context, not full specs.
+
+**What we pull (and why):**
+| Data | Source | Why |
+|------|--------|-----|
+| Product image URL | Metadata CSV (`Image Src`) | Placeholder image for the final PRD document (PM can swap later) |
+| Current selling price | Postgres (`pricing_listingprice`) | Baseline: "our similar product sells at $X" |
+| Shopify sales (12mo) | Postgres (channel 12585 — revenue, units) | DTC channel performance, always separate |
+| Amazon sales (12mo) | Postgres (channel 11929 — revenue, units) | Marketplace channel performance, always separate |
+| Product title + category | Metadata CSV | Validates the SKU and gives research engine search context |
+
+**What we do NOT pull:** Full spec sheet, vendor cost/margin, cascading attribute extraction — PM already entered target specs on the template.
+
+**Important:** Shopify and Amazon are different customer segments — always report them as separate line items, never combined.
+
+**Tasks:**
+- [ ] Read metadata CSV → match Reference SKU → return image URL, title, category
+- [ ] Query Postgres for listing price + 12mo sales split by channel (Shopify + Amazon separately)
+- [ ] Return simple object: `{ image_url, title, category, price, shopify_revenue, shopify_units, amazon_revenue, amazon_units }`
+- [ ] Handle "SKU not found" gracefully (flag in output)
 - [ ] Test with 3-5 SKUs across different categories
 - [ ] Git checkpoint: "Step 2 - Reference SKU lookup working"
 
 ### Step 3: Template Parser + Enrichment
-**Goal:** Script that reads filled Excel, merges with Reference SKU data
-- [ ] Read Excel rows via xlsx npm package
-- [ ] For each row: DB lookup → merge (user values take priority)
-- [ ] Identify fields still missing (flag for research)
-- [ ] Output: enriched ideation data ready for research
+**Goal:** Script that reads filled Excel, attaches Reference SKU lookup data, and prepares ideation objects for research
+- [ ] Read Excel rows (openpyxl / xlsx) → parse all columns per row
+- [ ] For each row: run Step 2 lookup → attach image, price, sales context
+- [ ] User-entered specs are the *target* specs (not overwritten by reference data)
+- [ ] Output: list of enriched ideation objects ready for competitive research
 - [ ] Git checkpoint: "Step 3 - Template parser working"
 
 ### Step 4: Competitive Research Engine
@@ -255,6 +271,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 ### Step 6: Excel Report Generator + Skill Definition
 **Goal:** Produce final Excel workbook and create the skill trigger
 - [ ] Generate .xlsx with one sheet per ideation (sections A-F)
+- [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) — PM can swap before generating
 - [ ] Style: brand colors, headers, conditional formatting
 - [ ] Upload to SharePoint via Graph API
 - [ ] Create SKILL.md definition (matching PRD Generator pattern)
