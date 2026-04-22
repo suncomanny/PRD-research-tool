@@ -9,8 +9,8 @@ planStatus:
   stakeholders: [Jesse Harper, Stephanie Barrera, Nelson Chu]
   tags: [tool-building, prd, competitive-research, category-agnostic]
   created: "2026-04-10"
-  updated: "2026-04-15T00:00:00.000Z"
-  progress: 5
+  updated: "2026-04-17T12:30:00.000Z"
+  progress: 8
 ---
 
 # PRD Research Tool - Ideation Template + Competitive Research Engine
@@ -246,12 +246,23 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] Git checkpoint: "Step 3 - Template parser working"
 
 ### Step 4: Competitive Research Engine
-**Goal:** For each ideation, research competitors and collect data
-- [ ] WebSearch for Amazon competitors matching specs
-- [ ] WebSearch for Home Depot / Walmart / Lowe's competitors
-- [ ] WebFetch known competitor sites (Duralec, Amico, NuWatt, Maxxima, 1000Bulbs, NSL USA)
-- [ ] Collect: pricing, specs, ratings, review counts, URLs
-- [ ] Split: Amazon vs brick-and-mortar
+**Goal:** For each ideation, research competitors and collect data without making the workflow brittle or token-bound to a single model session
+- [x] `4A` Packet generation: produce one ideation packet per row with target profile, pricing hypothesis, demand hypothesis, channel order, and evidence-to-collect prompts
+- [x] `4B` Resumable workspace: initialize a shared artifact folder with row packets, schemas, placeholder raw/normalized/analysis files, Claude/Codex handoff instructions, and a manifest updater
+- [ ] `4C` Amazon collection: collect raw Amazon competitor candidates only
+- [ ] `4D` Brick-and-mortar collection: collect raw Home Depot / Walmart / Lowe's candidates only
+- [ ] `4E` Brand-site collection: collect raw candidates from Duralec, Amico, NuWatt, Maxxima, 1000Bulbs, NSL USA, and other direct competitors only
+- [x] `4F` Normalization and dedupe: merge raw artifacts into one comparable competitor set, carry Stackline seeds forward as provisional candidates, and normalize pack/spec fields for analysis
+- [ ] **Shared schema / manifest contract:**
+  - Raw collection files use a shared competitor-result schema so Claude and Codex can switch without re-explaining prior work
+  - `manifest.json` is the source of truth for row status and next-step ownership
+  - Claude is the preferred raw collector (`4C` / `4D` / `4E`) when its sessions are stable
+  - Session instructions also expose a generic collector handoff so Codex can take over the same `1 row x 1 channel` task flow when Claude is unstable
+  - Codex owns workspace maintenance, normalization, analysis, report generation, and malformed raw-artifact repair
+  - Session refresh must tolerate an open/locked workbook by rebuilding from existing packet/artifact files when needed
+  - Session tooling exposes `status`, `next-batch`, and raw artifact validation so Claude batches can be resumed without rereading prior chat
+  - Session tooling also exposes raw-artifact repair so Codex can salvage partially successful collection runs instead of blocking on Claude retries
+  - A shared `STEP4_PROMPT.md` template defines the `1 row x 1 channel` raw-collection workflow
 - [ ] **Stackline integration:** If row has "Stackline Data? = Yes":
   - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\`
   - Match files by Stackline segment label / alias: `Stackline_[StacklineSegment]_*.csv`
@@ -259,20 +270,21 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - Parse `_summary` CSV as the primary source for product-level revenue, units, price, brand share, and competitor ranking
   - Parse `_traffic` CSV as the supplemental source for total traffic and derived conversion rate
   - Treat `_sales` CSV as secondary / optional until its schema is confirmed across multiple segments
-  - Merge into competitive analysis
-  - If Atlas segment names differ from template dropdown values, maintain an alias map instead of relying on raw string equality
+  - Merge into the ideation performance-estimation context, not just the raw competitor dump
 - [ ] Git checkpoint: "Step 4 - Research engine working"
 
 ### Step 5: Analysis & Recommendations Generator
 **Goal:** Turn raw competitor data into actionable recommendations
-- [ ] Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
-- [ ] Generate per-attribute recommendations with impact scores
-- [ ] Rank competitors by relevance
+- [x] `5A` Analysis artifacts: write resumable `analysis/row_###_analysis.json` files with pricing benchmarks, spec coverage, launch outlook, and provisional recommendations
+- [ ] `5B` Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
+- [ ] `5C` Generate per-attribute recommendations with impact scores and rank competitors by relevance
 - [ ] Generate PRD Generator pre-fill section
 - [ ] Git checkpoint: "Step 5 - Analysis engine working"
 
 ### Step 6: Excel Report Generator + Skill Definition
 **Goal:** Produce final Excel workbook and create the skill trigger
+- [x] `6A` Report artifacts: generate row-level `.xlsx` research report files from completed analysis artifacts
+- [x] Build a combined workbook with a summary sheet plus one sheet per completed ideation
 - [ ] Generate .xlsx with one sheet per ideation (sections A-F)
 - [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) — PM can swap before generating
 - [ ] Style: brand colors, headers, conditional formatting

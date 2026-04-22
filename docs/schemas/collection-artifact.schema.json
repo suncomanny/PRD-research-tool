@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sunco.local/prd-research-tool/collection-artifact.schema.json",
+  "title": "Collection Artifact",
+  "description": "Top-level file shape for resumable Step 4 raw and normalized collection outputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "artifact_status",
+    "batch_id",
+    "row_number",
+    "ideation_name",
+    "expected_owner",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "amazon_raw",
+        "brick_and_mortar_raw",
+        "brand_sites_raw",
+        "competitors_normalized",
+        "analysis"
+      ]
+    },
+    "artifact_status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "complete",
+        "blocked"
+      ]
+    },
+    "batch_id": {
+      "type": "string"
+    },
+    "row_number": {
+      "type": "integer"
+    },
+    "ideation_name": {
+      "type": "string"
+    },
+    "expected_owner": {
+      "type": "string",
+      "enum": [
+        "claude",
+        "codex"
+      ]
+    },
+    "source_channel_group": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "packet_file": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "queries_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "./competitor-result.schema.json"
+      }
+    },
+    "summary": {
+      "type": "object"
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocking_issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  }
+}

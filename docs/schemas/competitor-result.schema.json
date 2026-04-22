@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sunco.local/prd-research-tool/competitor-result.schema.json",
+  "title": "Competitor Result",
+  "description": "Shared record shape for competitor candidates collected during Step 4.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_channel",
+    "collection_method",
+    "brand",
+    "product_title",
+    "url"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_channel": {
+      "type": "string",
+      "enum": [
+        "amazon",
+        "home_depot",
+        "walmart",
+        "lowes",
+        "brand_site",
+        "stackline_seed"
+      ]
+    },
+    "source_domain": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "collection_method": {
+      "type": "string",
+      "enum": [
+        "web_search",
+        "web_fetch",
+        "manual",
+        "stackline_seed"
+      ]
+    },
+    "brand": {
+      "type": "string"
+    },
+    "product_title": {
+      "type": "string"
+    },
+    "model_number": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sku": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "variant": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pack_quantity": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "url": {
+      "type": "string"
+    },
+    "price": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "currency": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": "USD"
+    },
+    "wattage": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lumens": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cct": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "cri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "voltage": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dimmable": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "dimming_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "certifications": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rating": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "review_count": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "availability": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "match_confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "match_notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "extraction_notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "raw_observations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

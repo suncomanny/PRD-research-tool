@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sunco.local/prd-research-tool/research-manifest.schema.json",
+  "title": "Research Manifest",
+  "description": "Batch-level status file for resumable Step 4 execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "workbook_path",
+    "session_root",
+    "updated_at",
+    "rows"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "batch_id": {
+      "type": "string"
+    },
+    "workbook_path": {
+      "type": "string"
+    },
+    "session_root": {
+      "type": "string"
+    },
+    "sheet_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "updated_at": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "row_number",
+          "ideation_name",
+          "overall_status",
+          "packet_file",
+          "stages"
+        ],
+        "properties": {
+          "row_number": {
+            "type": "integer"
+          },
+          "ideation_name": {
+            "type": "string"
+          },
+          "overall_status": {
+            "type": "string"
+          },
+          "packet_file": {
+            "type": "string"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stages": {
+            "type": "object"
+          },
+          "artifacts": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}
