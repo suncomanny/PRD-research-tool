@@ -931,8 +931,18 @@ def repair_collection_artifact_payload(payload: Any, stage_key: str) -> tuple[An
     repaired["notes"] = ensure_string_list(repaired.get("notes"))
     repaired["blocking_issues"] = ensure_string_list(repaired.get("blocking_issues"))
 
+    row_number = repaired.get("row_number")
+    if not isinstance(row_number, int):
+        legacy_row_id = repaired.get("row_id")
+        if isinstance(legacy_row_id, int):
+            repaired["row_number"] = legacy_row_id
+            fixes.append("row_number")
+
     if not normalize_string(repaired.get("ideation_name")):
         legacy_ideation_name = None
+        row_label = repaired.get("row_label")
+        if isinstance(row_label, str):
+            legacy_ideation_name = normalize_string(row_label)
         row_reference = repaired.get("row_reference")
         if isinstance(row_reference, dict):
             legacy_ideation_name = normalize_string(
@@ -960,19 +970,6 @@ def repair_collection_artifact_payload(payload: Any, stage_key: str) -> tuple[An
         repaired["items"] = repaired_items
         items = repaired_items
 
-        for legacy_field in (
-            "candidates",
-            "source_channel",
-            "collection_method",
-            "row_reference",
-            "row_spec_summary",
-            "recommendations",
-            "row_spec_summary",
-        ):
-            if legacy_field in repaired:
-                repaired.pop(legacy_field, None)
-                fixes.append(f"drop:{legacy_field}")
-
     if isinstance(items, list):
         repaired_items = []
         for index, item in enumerate(items):
@@ -980,6 +977,21 @@ def repair_collection_artifact_payload(payload: Any, stage_key: str) -> tuple[An
             repaired_items.append(repaired_item)
             fixes.extend([f"items[{index}].{field}" for field in item_fixes])
         repaired["items"] = repaired_items
+
+    for legacy_field in (
+        "candidates",
+        "source_channel",
+        "collection_method",
+        "row_id",
+        "row_label",
+        "target_specs",
+        "row_reference",
+        "row_spec_summary",
+        "recommendations",
+    ):
+        if legacy_field in repaired:
+            repaired.pop(legacy_field, None)
+            fixes.append(f"drop:{legacy_field}")
 
     if fixes:
         repaired["updated_at"] = utc_now()
