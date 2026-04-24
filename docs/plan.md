@@ -9,8 +9,8 @@ planStatus:
   stakeholders: [Jesse Harper, Stephanie Barrera, Nelson Chu]
   tags: [tool-building, prd, competitive-research, category-agnostic]
   created: "2026-04-10"
-  updated: "2026-04-17T12:30:00.000Z"
-  progress: 8
+  updated: "2026-04-23T18:30:00.000Z"
+  progress: 9
 ---
 
 # PRD Research Tool - Ideation Template + Competitive Research Engine
@@ -249,10 +249,11 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 **Goal:** For each ideation, research competitors and collect data without making the workflow brittle or token-bound to a single model session
 - [x] `4A` Packet generation: produce one ideation packet per row with target profile, pricing hypothesis, demand hypothesis, channel order, and evidence-to-collect prompts
 - [x] `4B` Resumable workspace: initialize a shared artifact folder with row packets, schemas, placeholder raw/normalized/analysis files, Claude/Codex handoff instructions, and a manifest updater
-- [ ] `4C` Amazon collection: collect raw Amazon competitor candidates only
-- [ ] `4D` Brick-and-mortar collection: collect raw Home Depot / Walmart / Lowe's candidates only
-- [ ] `4E` Brand-site collection: collect raw candidates from Duralec, Amico, NuWatt, Maxxima, 1000Bulbs, NSL USA, and other direct competitors only
+- [x] `4C` Amazon collection: collect raw Amazon competitor candidates only
+- [x] `4D` Brick-and-mortar collection: collect raw Home Depot / Walmart / Lowe's candidates only
+- [x] `4E` Brand-site collection: collect raw candidates from Duralec, Amico, NuWatt, Maxxima, 1000Bulbs, NSL USA, and other direct competitors only
 - [x] `4F` Normalization and dedupe: merge raw artifacts into one comparable competitor set, carry Stackline seeds forward as provisional candidates, and normalize pack/spec fields for analysis
+- [x] `4G` Post-collection repair / price enrichment: salvage malformed raw artifacts and backfill missing prices from reachable product pages before analysis refresh
 - [ ] **Shared schema / manifest contract:**
   - Raw collection files use a shared competitor-result schema so Claude and Codex can switch without re-explaining prior work
   - `manifest.json` is the source of truth for row status and next-step ownership
@@ -277,6 +278,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 **Goal:** Turn raw competitor data into actionable recommendations
 - [x] `5A` Analysis artifacts: write resumable `analysis/row_###_analysis.json` files with pricing benchmarks, spec coverage, launch outlook, and provisional recommendations
 - [ ] `5B` Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
+- [x] Add a targeted price-enrichment pass so later rows do not rely only on snippet-level price capture
 - [ ] `5C` Generate per-attribute recommendations with impact scores and rank competitors by relevance
 - [ ] Generate PRD Generator pre-fill section
 - [ ] Git checkpoint: "Step 5 - Analysis engine working"
