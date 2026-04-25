@@ -369,6 +369,45 @@ def sanitize_metric_value(value: float | None, metric: str) -> float | None:
     return value
 
 
+def item_output_wattage(item: dict[str, Any]) -> float | None:
+    """Return a usable output-wattage sample, excluding bulb-equivalent labels."""
+    value = sanitize_metric_value(
+        representative_value(item.get("wattage"), reducer="max"),
+        "wattage",
+    )
+    if value is None:
+        return None
+
+    title = normalized_compare_text(item.get("product_title"))
+    if value in {40, 50, 60, 65, 75, 100, 120, 150, 200, 300} and (
+        "equivalent" in title or re.search(r"\beq\b", title) or "replacement" in title
+    ):
+        return None
+    return value
+
+
+def should_include_wattage_guidance(packet: dict[str, Any]) -> bool:
+    """Skip wattage-tier guidance for categories where wattage is mostly efficiency, not output class."""
+    identity = as_dict(packet.get("identity"))
+    target_profile = as_dict(packet.get("target_profile"))
+    physical = as_dict(target_profile.get("physical"))
+
+    category = normalized_compare_text(identity.get("category"))
+    subcategory = normalized_compare_text(identity.get("subcategory"))
+    mounting_type = normalized_compare_text(physical.get("mounting_type"))
+    form_factor = normalized_compare_text(physical.get("size_form_factor"))
+
+    if category == "bulbs":
+        return False
+    if mounting_type and "screw in" in mounting_type:
+        return False
+    if subcategory in {"a series", "a line", "bulbs"}:
+        return False
+    if form_factor in {"a19", "a21"}:
+        return False
+    return True
+
+
 def channel_counts(items: list[dict[str, Any]]) -> dict[str, int]:
     """Count normalized candidates by source channel."""
     counts = Counter()
@@ -767,17 +806,7 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
         ]
         if value is not None
     ]
-    wattage_samples = [
-        value
-        for value in [
-            sanitize_metric_value(
-                representative_value(item.get("wattage"), reducer="max"),
-                "wattage",
-            )
-            for item in items
-        ]
-        if value is not None
-    ]
+    wattage_samples = [value for value in [item_output_wattage(item) for item in items] if value is not None]
 
     for entry in [
         build_numeric_guidance_entry(
@@ -807,7 +836,9 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
                     reducer="max",
                 ),
                 "wattage",
-            ),
+            )
+            if should_include_wattage_guidance(packet)
+            else None,
             wattage_samples,
         ),
     ]:
