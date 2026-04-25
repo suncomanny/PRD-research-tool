@@ -115,6 +115,15 @@ def round_money(value: float | None) -> float | None:
     return round(value + 1e-9, 2)
 
 
+def round_metric(value: float | None) -> float | int | None:
+    """Round non-monetary numeric values for readable JSON output."""
+    if value is None:
+        return None
+    if float(value).is_integer():
+        return int(value)
+    return round(value + 1e-9, 2)
+
+
 def parse_series_numbers(value: Any) -> list[float]:
     """Extract numeric series from strings like 30/40/50W or 80+."""
     text = normalize_text(value)
@@ -166,6 +175,151 @@ def safe_pct_delta(current: float | None, baseline: float | None) -> float | Non
     return round(((current - baseline) / baseline) * 100, 2)
 
 
+def margin_floor_price(cost: float | None, margin_pct: float | None) -> float | None:
+    """Return the minimum price needed to hit a gross-margin target."""
+    if cost is None or margin_pct is None:
+        return None
+    if margin_pct < 0 or margin_pct >= 100:
+        return None
+    return cost / (1 - (margin_pct / 100))
+
+
+def percentile_rank(values: list[float], target: float | None) -> float | None:
+    """Return the share of values less than or equal to the target."""
+    if target is None or not values:
+        return None
+    ordered = sorted(values)
+    rank = sum(1 for value in ordered if value <= target)
+    return round((rank / len(ordered)) * 100, 2)
+
+
+def classify_market_position(percentile_value: float | None) -> str | None:
+    """Map a percentile into a plain-language positioning bucket."""
+    if percentile_value is None:
+        return None
+    if percentile_value <= 25:
+        return "value"
+    if percentile_value <= 60:
+        return "mainstream"
+    if percentile_value <= 85:
+        return "premium"
+    return "ultra_premium"
+
+
+def build_metric_position(
+    target_value: float | None,
+    sample_values: list[float],
+    source: str,
+) -> dict[str, Any]:
+    """Compare a target metric against a competitive distribution."""
+    if target_value is None or not sample_values:
+        return {}
+
+    sample_size = len(sample_values)
+    median_value = percentile(sample_values, 0.5)
+    p75_value = percentile(sample_values, 0.75)
+    percentile_value = percentile_rank(sample_values, target_value)
+    beat_count = sum(1 for value in sample_values if target_value >= value)
+
+    return compact_dict(
+        {
+            "evaluated_value": round_money(target_value),
+            "evaluated_value_source": source,
+            "sample_size": sample_size,
+            "percentile": percentile_value,
+            "bucket": classify_market_position(percentile_value),
+            "beat_count": beat_count,
+            "vs_median_pct": safe_pct_delta(target_value, median_value),
+            "median": round_money(median_value),
+            "p75": round_money(p75_value),
+        }
+    )
+
+
+def coverage_signal(coverage_pct: float) -> str:
+    """Classify how common a requested feature/certification is."""
+    if coverage_pct >= 60:
+        return "table_stakes"
+    if coverage_pct >= 25:
+        return "competitive"
+    if coverage_pct > 0:
+        return "differentiator"
+    return "whitespace"
+
+
+def coverage_recommendation(
+    label: str,
+    matched_count: int,
+    total_count: int,
+    signal: str,
+    kind: str,
+) -> str:
+    """Create actionable guidance for a feature or certification ask."""
+    coverage_text = f"{matched_count} of {total_count} competitors"
+    if signal == "table_stakes":
+        return f"{label} is table stakes: {coverage_text} include it, so Sunco should keep it to stay at parity."
+    if signal == "competitive":
+        return f"{label} is common but not universal: {coverage_text} include it, so include it if this concept needs mainstream channel parity."
+    if signal == "differentiator":
+        return f"{label} is a differentiator: only {coverage_text} include it, so keep it only if Sunco wants a premium feature claim."
+    if kind == "certification":
+        return f"No normalized competitors currently surface {label}; validate whether that certification is a real channel requirement before adding cost."
+    return f"No normalized competitors currently surface {label}; validate that it represents a real customer need before locking in added complexity."
+
+
+def build_numeric_guidance_entry(
+    label: str,
+    unit: str,
+    target_value: float | None,
+    sample_values: list[float],
+) -> dict[str, Any]:
+    """Compare a numeric ideation target against the competitor set."""
+    if target_value is None or len(sample_values) < 3:
+        return {}
+
+    sample_size = len(sample_values)
+    median_value = percentile(sample_values, 0.5)
+    p75_value = percentile(sample_values, 0.75)
+    percentile_value = percentile_rank(sample_values, target_value)
+    beat_count = sum(1 for value in sample_values if target_value >= value)
+    if percentile_value is None:
+        return {}
+
+    if percentile_value < 50 and median_value is not None:
+        signal = "below_market"
+        recommendation = (
+            f"Increase {label.lower()} to about {round_metric(median_value)}{unit} to clear at least half of current competitors."
+        )
+    elif percentile_value < 75 and p75_value is not None:
+        signal = "mid_pack"
+        recommendation = (
+            f"{label} is mid-pack today; push toward {round_metric(p75_value)}{unit} if this concept needs a stronger performance claim."
+        )
+    else:
+        signal = "leading"
+        recommendation = (
+            f"{label} already clears {beat_count} of {sample_size} competitors; keep it only if margin supports a differentiated position."
+        )
+
+    return compact_dict(
+        {
+            "label": label,
+            "unit": unit,
+            "target_value": round_metric(target_value),
+            "sample_size": sample_size,
+            "min": round_metric(min(sample_values)),
+            "p25": round_metric(percentile(sample_values, 0.25)),
+            "median": round_metric(median_value),
+            "p75": round_metric(p75_value),
+            "max": round_metric(max(sample_values)),
+            "target_percentile": percentile_value,
+            "beat_count": beat_count,
+            "signal": signal,
+            "recommended_action": recommendation,
+        }
+    )
+
+
 def unit_price(record: dict[str, Any]) -> float | None:
     """Calculate per-unit price using pack quantity when available."""
     price = parse_number(record.get("price"))
@@ -187,6 +341,19 @@ def representative_value(value: Any, reducer: str = "max") -> float | None:
     if reducer == "median":
         return percentile(numbers, 0.5)
     return max(numbers)
+
+
+def sanitize_metric_value(value: float | None, metric: str) -> float | None:
+    """Drop obviously malformed numeric samples before analysis."""
+    if value is None:
+        return None
+    if metric == "wattage" and value < 10:
+        return None
+    if metric == "lumens" and value < 100:
+        return None
+    if metric == "cri" and not (60 <= value <= 100):
+        return None
+    return value
 
 
 def channel_counts(items: list[dict[str, Any]]) -> dict[str, int]:
@@ -262,8 +429,14 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
         if current_unit_price is not None:
             unit_price_samples.append(current_unit_price)
 
-            wattage = representative_value(item.get("wattage"), reducer="max")
-            lumens = representative_value(item.get("lumens"), reducer="max")
+            wattage = sanitize_metric_value(
+                representative_value(item.get("wattage"), reducer="max"),
+                "wattage",
+            )
+            lumens = sanitize_metric_value(
+                representative_value(item.get("lumens"), reducer="max"),
+                "lumens",
+            )
             if wattage not in (None, 0):
                 unit_price_per_watt.append(current_unit_price / wattage)
             if lumens not in (None, 0):
@@ -274,10 +447,13 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
             multi_pack_count += 1
 
     target_profile = as_dict(packet.get("target_profile"))
+    electrical = as_dict(target_profile.get("electrical"))
     business_case = as_dict(target_profile.get("business_case"))
     research_plan = as_dict(packet.get("research_plan"))
     target_msrp = parse_number(business_case.get("target_msrp"))
     target_vendor_cost = parse_number(business_case.get("target_vendor_cost"))
+    target_margin_pct_shopify = parse_number(business_case.get("target_margin_pct_shopify"))
+    target_margin_pct_amazon = parse_number(business_case.get("target_margin_pct_amazon"))
     search_band = as_dict(research_plan.get("target_price_band"))
     search_floor = parse_number(search_band.get("search_floor"))
     search_ceiling = parse_number(search_band.get("search_ceiling"))
@@ -285,6 +461,12 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
     unit_price_median = parse_number(unit_price_stats.get("median"))
     observed_floor = parse_number(unit_price_stats.get("p25")) or parse_number(unit_price_stats.get("min"))
     observed_ceiling = parse_number(unit_price_stats.get("p75")) or parse_number(unit_price_stats.get("max"))
+    margin_floor_shopify = margin_floor_price(target_vendor_cost, target_margin_pct_shopify)
+    margin_floor_amazon = margin_floor_price(target_vendor_cost, target_margin_pct_amazon)
+    minimum_margin_safe_price = max(
+        [value for value in [margin_floor_shopify, margin_floor_amazon] if value is not None],
+        default=None,
+    )
 
     recommended_floor = observed_floor
     recommended_ceiling = observed_ceiling
@@ -300,6 +482,18 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
         recommended_floor = observed_floor
         recommended_ceiling = observed_ceiling
 
+    margin_conflict = bool(
+        minimum_margin_safe_price is not None
+        and recommended_ceiling is not None
+        and minimum_margin_safe_price > recommended_ceiling
+    )
+    if (
+        minimum_margin_safe_price is not None
+        and recommended_floor is not None
+        and not margin_conflict
+    ):
+        recommended_floor = max(recommended_floor, minimum_margin_safe_price)
+
     if target_msrp is not None and recommended_floor is not None and recommended_ceiling is not None:
         if target_msrp < recommended_floor:
             positioning = "aggressive"
@@ -314,12 +508,64 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
         positioning = "undetermined"
         anchor = unit_price_median
 
+    evaluated_price = target_msrp
+    evaluated_price_source = "target_msrp"
+    if evaluated_price is None and minimum_margin_safe_price is not None:
+        evaluated_price = minimum_margin_safe_price
+        evaluated_price_source = "margin_floor"
+    if evaluated_price is None:
+        evaluated_price = anchor
+        evaluated_price_source = "market_anchor"
+
+    target_wattage = sanitize_metric_value(
+        representative_value(
+            electrical.get("wattage_max") or electrical.get("wattage_primary"),
+            reducer="max",
+        ),
+        "wattage",
+    )
+    target_lumens = sanitize_metric_value(
+        representative_value(electrical.get("lumens_target"), reducer="max"),
+        "lumens",
+    )
+    target_unit_price_per_watt = None
+    target_unit_price_per_lumen = None
+    if evaluated_price is not None and target_wattage not in (None, 0):
+        target_unit_price_per_watt = evaluated_price / target_wattage
+    if evaluated_price is not None and target_lumens not in (None, 0):
+        target_unit_price_per_lumen = evaluated_price / target_lumens
+
+    margin_targets = compact_dict(
+        {
+            "shopify": compact_dict(
+                {
+                    "target_margin_pct": target_margin_pct_shopify,
+                    "minimum_viable_msrp": round_money(margin_floor_shopify),
+                    "vs_target_msrp_pct": safe_pct_delta(target_msrp, margin_floor_shopify),
+                    "vs_market_median_pct": safe_pct_delta(margin_floor_shopify, unit_price_median),
+                }
+            ),
+            "amazon": compact_dict(
+                {
+                    "target_margin_pct": target_margin_pct_amazon,
+                    "minimum_viable_msrp": round_money(margin_floor_amazon),
+                    "vs_target_msrp_pct": safe_pct_delta(target_msrp, margin_floor_amazon),
+                    "vs_market_median_pct": safe_pct_delta(margin_floor_amazon, unit_price_median),
+                }
+            ),
+        }
+    )
+
     recommendation = compact_dict(
         {
-            "observed_unit_price_floor": round_money(recommended_floor),
-            "observed_unit_price_ceiling": round_money(recommended_ceiling),
+            "observed_unit_price_floor": round_money(observed_floor),
+            "observed_unit_price_ceiling": round_money(observed_ceiling),
+            "recommended_floor": round_money(recommended_floor),
+            "recommended_ceiling": round_money(recommended_ceiling),
+            "minimum_margin_safe_price": round_money(minimum_margin_safe_price),
             "anchor": round_money(anchor),
             "positioning": positioning,
+            "margin_conflict": margin_conflict,
         }
     )
 
@@ -332,6 +578,22 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
             "target_msrp": round_money(target_msrp),
             "target_vendor_cost": round_money(target_vendor_cost),
             "target_vs_unit_price_median_pct": safe_pct_delta(target_msrp, unit_price_median),
+            "margin_targets": margin_targets,
+            "target_price_position": build_metric_position(
+                evaluated_price,
+                unit_price_samples,
+                evaluated_price_source,
+            ),
+            "target_price_per_watt_position": build_metric_position(
+                target_unit_price_per_watt,
+                unit_price_per_watt,
+                evaluated_price_source,
+            ),
+            "target_price_per_lumen_position": build_metric_position(
+                target_unit_price_per_lumen,
+                unit_price_per_lumen,
+                evaluated_price_source,
+            ),
             "suggested_msrp_range": recommendation,
             "collection_price_band": compact_dict(
                 {
@@ -391,6 +653,8 @@ def certification_matches(item: dict[str, Any], label: str) -> bool:
 def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
     """Measure how well the normalized set covers target features and certifications."""
     research_plan = as_dict(packet.get("research_plan"))
+    target_profile = as_dict(packet.get("target_profile"))
+    electrical = as_dict(target_profile.get("electrical"))
     must_validate = as_dict(research_plan.get("must_validate"))
     certifications = unique_preserve_order(
         [normalize_text(value) for value in as_list(must_validate.get("certifications")) if normalize_text(value)]
@@ -408,24 +672,118 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
     feature_coverage = []
     for label in feature_watchlist:
         matched_count = sum(1 for item in items if feature_matches(item, label))
+        coverage_pct = round((matched_count / len(items)) * 100, 2) if items else 0
+        signal = coverage_signal(coverage_pct)
         feature_coverage.append(
-            {
-                "label": label,
-                "matched_count": matched_count,
-                "coverage_pct": round((matched_count / len(items)) * 100, 2) if items else 0,
-            }
+            compact_dict(
+                {
+                    "label": label,
+                    "matched_count": matched_count,
+                    "coverage_pct": coverage_pct,
+                    "signal": signal,
+                    "recommended_action": coverage_recommendation(
+                        label,
+                        matched_count,
+                        len(items),
+                        signal,
+                        "feature",
+                    ),
+                }
+            )
         )
 
     certification_coverage = []
     for label in certifications:
         matched_count = sum(1 for item in items if certification_matches(item, label))
+        coverage_pct = round((matched_count / len(items)) * 100, 2) if items else 0
+        signal = coverage_signal(coverage_pct)
         certification_coverage.append(
-            {
-                "label": label,
-                "matched_count": matched_count,
-                "coverage_pct": round((matched_count / len(items)) * 100, 2) if items else 0,
-            }
+            compact_dict(
+                {
+                    "label": label,
+                    "matched_count": matched_count,
+                    "coverage_pct": coverage_pct,
+                    "signal": signal,
+                    "recommended_action": coverage_recommendation(
+                        label,
+                        matched_count,
+                        len(items),
+                        signal,
+                        "certification",
+                    ),
+                }
+            )
         )
+
+    numeric_guidance = []
+    lumens_samples = [
+        value
+        for value in [
+            sanitize_metric_value(
+                representative_value(item.get("lumens"), reducer="max"),
+                "lumens",
+            )
+            for item in items
+        ]
+        if value is not None
+    ]
+    cri_samples = [
+        value
+        for value in [
+            sanitize_metric_value(
+                representative_value(item.get("cri"), reducer="max"),
+                "cri",
+            )
+            for item in items
+        ]
+        if value is not None
+    ]
+    wattage_samples = [
+        value
+        for value in [
+            sanitize_metric_value(
+                representative_value(item.get("wattage"), reducer="max"),
+                "wattage",
+            )
+            for item in items
+        ]
+        if value is not None
+    ]
+
+    for entry in [
+        build_numeric_guidance_entry(
+            "Lumens",
+            " lm",
+            sanitize_metric_value(
+                representative_value(electrical.get("lumens_target"), reducer="max"),
+                "lumens",
+            ),
+            lumens_samples,
+        ),
+        build_numeric_guidance_entry(
+            "CRI",
+            "",
+            sanitize_metric_value(
+                representative_value(electrical.get("cri"), reducer="max"),
+                "cri",
+            ),
+            cri_samples,
+        ),
+        build_numeric_guidance_entry(
+            "Output Wattage Tier",
+            " W",
+            sanitize_metric_value(
+                representative_value(
+                    electrical.get("wattage_max") or electrical.get("wattage_primary"),
+                    reducer="max",
+                ),
+                "wattage",
+            ),
+            wattage_samples,
+        ),
+    ]:
+        if entry:
+            numeric_guidance.append(entry)
 
     notable_gaps = []
     for entry in feature_coverage:
@@ -440,6 +798,7 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
         "certification_watchlist": certifications,
         "feature_coverage": feature_coverage,
         "certification_coverage": certification_coverage,
+        "numeric_guidance": numeric_guidance,
         "notable_gaps": notable_gaps,
     }
 
@@ -477,12 +836,17 @@ def derive_launch_outlook(
         pricing_analysis.get("suggested_msrp_range", {}).get("positioning")
     )
     gap_count = len(spec_coverage.get("notable_gaps", []))
+    margin_conflict = bool(
+        as_dict(pricing_analysis.get("suggested_msrp_range")).get("margin_conflict")
+    )
 
     if sales_growth is not None and unit_growth is not None:
         if sales_growth > 0 and unit_growth > 0 and positioning in {"aligned", "aggressive"} and gap_count <= 2:
             return "favorable"
         if sales_growth < 0 or unit_growth < 0 or positioning == "premium":
             return "cautious"
+    if margin_conflict:
+        return "cautious"
     if gap_count >= 3:
         return "cautious"
     return "mixed"
@@ -557,7 +921,18 @@ def build_recommendations(
     suggested = pricing_analysis.get("suggested_msrp_range", {})
     suggested_floor = parse_number(suggested.get("observed_unit_price_floor"))
     suggested_ceiling = parse_number(suggested.get("observed_unit_price_ceiling"))
+    recommended_floor = parse_number(suggested.get("recommended_floor"))
+    recommended_ceiling = parse_number(suggested.get("recommended_ceiling"))
+    minimum_margin_safe_price = parse_number(suggested.get("minimum_margin_safe_price"))
     positioning = normalize_text(suggested.get("positioning"))
+    if (
+        minimum_margin_safe_price is not None
+        and suggested_ceiling is not None
+        and minimum_margin_safe_price > suggested_ceiling
+    ):
+        recommendations.append(
+            f"Minimum margin-safe MSRP of ${minimum_margin_safe_price:.2f} sits above the current market ceiling of ${suggested_ceiling:.2f}; either lower cost or justify a premium launch story."
+        )
     if target_msrp is not None and suggested_floor is not None and suggested_ceiling is not None:
         if positioning == "premium":
             recommendations.append(
@@ -571,10 +946,45 @@ def build_recommendations(
             recommendations.append(
                 f"Target MSRP ${target_msrp:.2f} sits inside the observed comparable unit-price band of ${suggested_floor:.2f}-${suggested_ceiling:.2f}."
             )
+    elif (
+        recommended_floor is not None
+        and recommended_ceiling is not None
+        and recommended_floor <= recommended_ceiling
+    ):
+        recommendations.append(
+            f"Use ${recommended_floor:.2f}-${recommended_ceiling:.2f} as the working MSRP band until PMs set an explicit target MSRP."
+        )
 
-    gaps = spec_coverage.get("notable_gaps", [])
-    if gaps:
-        recommendations.append(gaps[0])
+    target_price_position = as_dict(pricing_analysis.get("target_price_position"))
+    percentile_value = parse_number(target_price_position.get("percentile"))
+    price_bucket = normalize_text(target_price_position.get("bucket"))
+    evaluated_value = parse_number(target_price_position.get("evaluated_value"))
+    if evaluated_value is not None and percentile_value is not None and price_bucket:
+        recommendations.append(
+            f"At ${evaluated_value:.2f}, this concept prices around the {percentile_value:.0f}th percentile of comparable unit prices, which is a {price_bucket.replace('_', ' ')} market position."
+        )
+
+    feature_actions = [
+        normalize_text(entry.get("recommended_action"))
+        for entry in as_list(spec_coverage.get("feature_coverage"))
+        if normalize_text(entry.get("recommended_action"))
+        and normalize_text(entry.get("signal")) in {"table_stakes", "whitespace"}
+    ]
+    certification_actions = [
+        normalize_text(entry.get("recommended_action"))
+        for entry in as_list(spec_coverage.get("certification_coverage"))
+        if normalize_text(entry.get("recommended_action"))
+        and normalize_text(entry.get("signal")) in {"table_stakes", "whitespace"}
+    ]
+    numeric_actions = [
+        normalize_text(entry.get("recommended_action"))
+        for entry in as_list(spec_coverage.get("numeric_guidance"))
+        if normalize_text(entry.get("recommended_action"))
+    ]
+
+    for bucket in (feature_actions, certification_actions, numeric_actions):
+        if bucket:
+            recommendations.append(bucket[0])
 
     raw_stage_statuses = summary.get("raw_stage_statuses", {})
     if summary.get("non_seed_candidate_count", 0) == 0 and summary.get("candidate_count", 0) > 0:

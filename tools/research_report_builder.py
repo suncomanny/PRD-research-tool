@@ -36,7 +36,10 @@ DEFAULT_COLUMN_WIDTHS = {
     "F": 18,
     "G": 18,
     "H": 24,
+    "I": 18,
+    "J": 36,
 }
+ALTERNATE_ROW_FILL = PatternFill(fill_type="solid", fgColor="F7FBFF")
 AMAZON_CHANNELS = {"amazon"}
 BM_DIRECT_CHANNELS = {"home_depot", "walmart", "lowes", "brand_site", "stackline_seed"}
 
@@ -95,7 +98,7 @@ def section_header(ws, row: int, title: str) -> int:
     ws.cell(row=row, column=1).fill = HEADER_FILL
     ws.cell(row=row, column=1).font = HEADER_FONT
     ws.cell(row=row, column=1).alignment = WRAP_ALIGNMENT
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=8)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=10)
     return row + 1
 
 
@@ -125,7 +128,7 @@ def merged_text_row(ws, row: int, label: str, value: Any) -> int:
     ws.cell(row=row, column=1).fill = SUBHEADER_FILL
     ws.cell(row=row, column=2, value=normalize_text(value))
     ws.cell(row=row, column=2).alignment = WRAP_ALIGNMENT
-    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=8)
+    ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=10)
     return row + 1
 
 
@@ -159,10 +162,12 @@ def write_table(ws, row: int, title: str, headers: list[str], rows: list[list[An
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=len(headers))
         return row + 2
 
-    for values in rows:
+    for row_offset, values in enumerate(rows):
         for col_index, value in enumerate(values, start=1):
             ws.cell(row=row, column=col_index, value=normalize_text(value))
             ws.cell(row=row, column=col_index).alignment = WRAP_ALIGNMENT
+            if row_offset % 2 == 1:
+                ws.cell(row=row, column=col_index).fill = ALTERNATE_ROW_FILL
         row += 1
     return row + 1
 
@@ -233,6 +238,139 @@ def coverage_rows(entries: list[dict[str, Any]]) -> list[list[Any]]:
     return rows
 
 
+def benchmark_rows(pricing: dict[str, Any]) -> list[list[Any]]:
+    """Format multi-metric pricing benchmark rows."""
+    metrics = [
+        ("Raw Price", as_dict(pricing.get("price_benchmarks"))),
+        ("Unit Price", as_dict(pricing.get("unit_price_benchmarks"))),
+        ("Unit Price / Watt", as_dict(pricing.get("unit_price_per_watt_benchmarks"))),
+        ("Unit Price / Lumen", as_dict(pricing.get("unit_price_per_lumen_benchmarks"))),
+    ]
+    rows = []
+    for label, metric in metrics:
+        rows.append(
+            [
+                label,
+                metric.get("sample_size"),
+                metric.get("min"),
+                metric.get("p25"),
+                metric.get("median"),
+                metric.get("mean"),
+                metric.get("p75"),
+                metric.get("max"),
+            ]
+        )
+    return rows
+
+
+def pricing_position_rows(pricing: dict[str, Any]) -> list[list[Any]]:
+    """Format pricing positioning rows."""
+    suggested = as_dict(pricing.get("suggested_msrp_range"))
+    target_position = as_dict(pricing.get("target_price_position"))
+    return [
+        ["Target MSRP", pricing.get("target_msrp")],
+        ["Evaluated Price", target_position.get("evaluated_value")],
+        ["Evaluated Price Source", target_position.get("evaluated_value_source")],
+        ["Target Price Percentile", target_position.get("percentile")],
+        ["Target Price Bucket", target_position.get("bucket")],
+        ["Target vs Market Median %", target_position.get("vs_median_pct")],
+        ["Observed Unit Price Floor (P25)", suggested.get("observed_unit_price_floor")],
+        ["Observed Unit Price Ceiling (P75)", suggested.get("observed_unit_price_ceiling")],
+        ["Recommended Floor", suggested.get("recommended_floor")],
+        ["Recommended Ceiling", suggested.get("recommended_ceiling")],
+        ["Minimum Margin-Safe MSRP", suggested.get("minimum_margin_safe_price")],
+        ["Suggested Positioning", suggested.get("positioning")],
+        ["Margin Conflict", suggested.get("margin_conflict")],
+    ]
+
+
+def margin_rows(pricing: dict[str, Any]) -> list[list[Any]]:
+    """Format channel-specific margin guidance rows."""
+    rows = []
+    for channel in ["shopify", "amazon"]:
+        entry = as_dict(as_dict(pricing.get("margin_targets")).get(channel))
+        if not entry:
+            continue
+        rows.append(
+            [
+                channel.title(),
+                entry.get("target_margin_pct"),
+                entry.get("minimum_viable_msrp"),
+                entry.get("vs_target_msrp_pct"),
+                entry.get("vs_market_median_pct"),
+            ]
+        )
+    return rows
+
+
+def value_position_rows(pricing: dict[str, Any]) -> list[list[Any]]:
+    """Format value-ranking rows for unit price, price per watt, and price per lumen."""
+    rows = []
+    metrics = [
+        ("Unit Price", as_dict(pricing.get("target_price_position"))),
+        ("Unit Price / Watt", as_dict(pricing.get("target_price_per_watt_position"))),
+        ("Unit Price / Lumen", as_dict(pricing.get("target_price_per_lumen_position"))),
+    ]
+    for label, metric in metrics:
+        if not metric:
+            continue
+        rows.append(
+            [
+                label,
+                metric.get("evaluated_value"),
+                metric.get("percentile"),
+                metric.get("bucket"),
+                metric.get("vs_median_pct"),
+            ]
+        )
+    return rows
+
+
+def spec_action_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
+    """Format actionable feature/certification coverage rows."""
+    rows = []
+    for entry in as_list(spec_coverage.get("feature_coverage")):
+        rows.append(
+            [
+                "Feature",
+                entry.get("label"),
+                entry.get("signal"),
+                entry.get("coverage_pct"),
+                entry.get("matched_count"),
+                entry.get("recommended_action"),
+            ]
+        )
+    for entry in as_list(spec_coverage.get("certification_coverage")):
+        rows.append(
+            [
+                "Certification",
+                entry.get("label"),
+                entry.get("signal"),
+                entry.get("coverage_pct"),
+                entry.get("matched_count"),
+                entry.get("recommended_action"),
+            ]
+        )
+    return rows
+
+
+def numeric_guidance_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
+    """Format numeric target-positioning rows."""
+    rows = []
+    for entry in as_list(spec_coverage.get("numeric_guidance")):
+        rows.append(
+            [
+                entry.get("label"),
+                entry.get("target_value"),
+                entry.get("median"),
+                entry.get("p75"),
+                entry.get("target_percentile"),
+                entry.get("recommended_action"),
+            ]
+        )
+    return rows
+
+
 def report_filename(row_number: int) -> str:
     """Return the stable report filename for a row."""
     return f"row_{row_number:03d}_research_report.xlsx"
@@ -294,10 +432,10 @@ def render_row_sheet(
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
     ws.cell(row=2, column=1, value=f"Row {row_number} Research Report")
     ws.cell(row=2, column=1).fill = ACCENT_FILL
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=9)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=10)
 
     row = 4
     row = section_header(ws, row, "Section A - Ideation Summary")
@@ -344,16 +482,30 @@ def render_row_sheet(
     row = write_table(
         ws,
         row,
-        "Section D - Pricing Analysis",
+        "Section D - Pricing Position",
         ["Metric", "Value"],
-        [
-            ["Observed Unit Price Floor", as_dict(pricing.get("suggested_msrp_range")).get("observed_unit_price_floor")],
-            ["Observed Unit Price Ceiling", as_dict(pricing.get("suggested_msrp_range")).get("observed_unit_price_ceiling")],
-            ["Recommended Anchor", as_dict(pricing.get("suggested_msrp_range")).get("anchor")],
-            ["Positioning", as_dict(pricing.get("suggested_msrp_range")).get("positioning")],
-            ["Target vs Unit Price Median %", pricing.get("target_vs_unit_price_median_pct")],
-            ["Price Sample Count", as_dict(pricing.get("price_benchmarks")).get("sample_size")],
-        ],
+        pricing_position_rows(pricing),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Pricing Benchmarks",
+        ["Metric", "Samples", "Min", "P25", "Median", "Mean", "P75", "Max"],
+        benchmark_rows(pricing),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Margin Targets",
+        ["Channel", "Target Margin %", "Min MSRP", "Vs Target MSRP %", "Vs Market Median %"],
+        margin_rows(pricing),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Value Ranking",
+        ["Metric", "Target", "Percentile", "Bucket", "Vs Median %"],
+        value_position_rows(pricing),
     )
     row = write_table(
         ws,
@@ -366,16 +518,16 @@ def render_row_sheet(
     row = write_table(
         ws,
         row,
-        "Section E - Spec Recommendations",
-        ["Feature", "Matched", "Coverage %"],
-        coverage_rows(as_list(spec_coverage.get("feature_coverage"))),
+        "Section E - Feature / Certification Signals",
+        ["Type", "Label", "Signal", "Coverage %", "Matched", "Recommendation"],
+        spec_action_rows(spec_coverage),
     )
     row = write_table(
         ws,
         row,
-        "Certification Coverage",
-        ["Certification", "Matched", "Coverage %"],
-        coverage_rows(as_list(spec_coverage.get("certification_coverage"))),
+        "Numeric Target Positioning",
+        ["Metric", "Target", "Median", "P75", "Percentile", "Recommendation"],
+        numeric_guidance_rows(spec_coverage),
     )
     row = write_list_section(ws, row, "Recommendations", as_list(analysis.get("recommendations")))
     row = write_list_section(ws, row, "Notes", as_list(analysis.get("notes")))
