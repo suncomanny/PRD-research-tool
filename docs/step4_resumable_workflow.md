@@ -7,6 +7,8 @@ Step 4 is the most token-intensive part of the tool. The work is intentionally s
 ## Step 4 Chunks
 
 - `4A` Packet generation: build one ideation packet per row with search targets, pricing hypotheses, demand hypotheses, and channel order.
+- Stackline is the default market-intelligence layer for Amazon and Home Depot when a matching segment bundle exists. Web collection is primarily for spec enrichment and uncovered channels.
+- If Stackline is expected but no matching segment bundle exists, the packet must explicitly fall back to web collection instead of silently behaving like a no-Stackline row.
 - `4B` Resumable workspace: initialize a shared session folder with packets, schemas, placeholders, instructions, and a manifest.
 - `4C` Amazon collection: collect raw Amazon competitor candidates only.
 - `4D` Brick-and-mortar collection: collect raw Home Depot, Walmart, and Lowe's competitor candidates only.
@@ -143,6 +145,8 @@ Use `instructions/STEP4_PROMPT.md` as the one-task template for raw collection. 
 ## Required Behavior
 
 - Raw collection files must stay raw. No dedupe or recommendation logic belongs there.
+- When a packet says `collection_mode = stackline_first`, use Stackline seeds and market context as the primary Amazon/Home Depot anchor, and use web pages mainly to enrich missing attributes.
+- When a packet says `collection_mode = web_fallback`, Stackline was expected but missing; treat Amazon/Home Depot conclusions as provisional and collect directly from the web.
 - Price enrichment may append missing prices and extraction notes to raw files, but it must not delete or restructure valid raw competitor entries.
 - Normalized files are the first place where products become comparable across channels.
 - Analysis files are where pricing targets, spec gaps, and performance-estimation logic get applied.

@@ -28,7 +28,7 @@ planStatus:
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
 | **Runtime** | Node.js (matching PRD Generator pattern: `xlsx` + `docx` npm packages + SharePoint Graph API) |
-| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool reads from local sync folder when "Stackline Data?" = Yes |
+| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context and falls back to web collection if a matching segment file is missing |
 | **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\` |
 | **Stackline naming convention** | `Stackline_[StacklineSegment]_[YYYY-MM]_[type].csv` (type = summary, traffic, or sales) |
 
@@ -264,7 +264,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - Session tooling exposes `status`, `next-batch`, and raw artifact validation so Claude batches can be resumed without rereading prior chat
   - Session tooling also exposes raw-artifact repair so Codex can salvage partially successful collection runs instead of blocking on Claude retries
   - A shared `STEP4_PROMPT.md` template defines the `1 row x 1 channel` raw-collection workflow
-- [ ] **Stackline integration:** If row has "Stackline Data? = Yes":
+- [ ] **Stackline integration:** Treat Stackline as the default Amazon / Home Depot market-intelligence layer unless a row explicitly opts out:
   - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\`
   - Match files by Stackline segment label / alias: `Stackline_[StacklineSegment]_*.csv`
   - Pick newest by YYYY-MM date in filename
@@ -272,6 +272,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - Parse `_traffic` CSV as the supplemental source for total traffic and derived conversion rate
   - Treat `_sales` CSV as secondary / optional until its schema is confirmed across multiple segments
   - Merge into the ideation performance-estimation context, not just the raw competitor dump
+  - If no matching Stackline bundle is found, mark the row as `web_fallback` and continue with web collection instead of failing
 - [ ] Git checkpoint: "Step 4 - Research engine working"
 
 ### Step 5: Analysis & Recommendations Generator

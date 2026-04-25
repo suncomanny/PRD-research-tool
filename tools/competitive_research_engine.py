@@ -69,6 +69,46 @@ CHANNEL_LABELS = {
 }
 
 
+def stackline_strategy(ideation: dict[str, Any]) -> dict[str, Any]:
+    """Describe whether this row should use Stackline-first or web-fallback collection."""
+    stackline = ideation.get("stackline_context") or {}
+    expected = bool(stackline.get("expected"))
+    matched = bool(stackline.get("matched"))
+
+    if matched:
+        return compact_dict(
+            {
+                "expected": True,
+                "matched": True,
+                "mode": "stackline_first",
+                "fallback_mode": stackline.get("fallback_mode") or "targeted_web_enrichment",
+                "segment_name": stackline.get("segment_name"),
+                "matched_bundle": stackline.get("matched_bundle"),
+                "warnings": stackline.get("warnings"),
+            }
+        )
+
+    if expected:
+        return compact_dict(
+            {
+                "expected": True,
+                "matched": False,
+                "mode": "web_fallback",
+                "fallback_mode": stackline.get("fallback_mode") or "web_collection_only",
+                "segment_name": stackline.get("segment_name"),
+                "matched_bundle": stackline.get("matched_bundle"),
+                "warnings": stackline.get("warnings"),
+            }
+        )
+
+    return {
+        "expected": False,
+        "matched": False,
+        "mode": "web_only",
+        "fallback_mode": "web_collection_only",
+    }
+
+
 def normalize_text(value: Any) -> str | None:
     """Normalize optional values into trimmed strings."""
     if value is None:
@@ -629,9 +669,18 @@ def build_demand_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
     signals = performance.get("opportunity_signals", [])
 
     if not market_snapshot:
+        strategy = stackline_strategy(ideation)
         return {
-            "posture": "no_stackline_context",
-            "signals": ["collect_market_proxies_from_competitor_set"],
+            "posture": (
+                "stackline_expected_but_missing"
+                if strategy.get("expected")
+                else "no_stackline_context"
+            ),
+            "signals": (
+                ["stackline_missing_fallback_to_web_collection", "collect_market_proxies_from_competitor_set"]
+                if strategy.get("expected")
+                else ["collect_market_proxies_from_competitor_set"]
+            ),
         }
 
     sunco_share = parse_percent(sunco_position.get("sales_share_pct"))
@@ -678,6 +727,18 @@ def build_evidence_to_collect(ideation: dict[str, Any]) -> list[str]:
         "Find 5-10 close Amazon comparables that match the same size/form factor and wattage class.",
         "Find 3-6 Home Depot, Walmart, and Lowe's comparables to anchor non-Amazon price positioning.",
     ]
+    strategy = stackline_strategy(ideation)
+
+    if strategy.get("matched"):
+        evidence.insert(
+            0,
+            "Use the matched Stackline segment as the primary Amazon/Home Depot market context, then use web research mainly to enrich missing specs and certifications.",
+        )
+    elif strategy.get("expected"):
+        evidence.insert(
+            0,
+            "Stackline is expected for this row but no matching segment bundle was found, so treat Amazon/Home Depot market context as provisional and fall back to web collection.",
+        )
 
     price_band = pricing.get("price_band_for_collection") or {}
     if price_band:
@@ -728,6 +789,7 @@ def build_research_priority(ideation: dict[str, Any]) -> str:
         .get("performance_estimation_context", {})
     )
     signals = performance.get("opportunity_signals", [])
+    strategy = stackline_strategy(ideation)
 
     if any(
         signal in signals
@@ -738,6 +800,8 @@ def build_research_priority(ideation: dict[str, Any]) -> str:
         ]
     ):
         return "high"
+    if strategy.get("expected") and not strategy.get("matched"):
+        return "high"
     if ideation.get("stackline_context"):
         return "medium"
     return "normal"
@@ -747,10 +811,17 @@ def build_collection_targets(ideation: dict[str, Any]) -> dict[str, Any]:
     """Define the minimum collection counts for the research pass."""
     priority_channels = build_priority_channels(ideation)
     amazon_primary = priority_channels[0] == "amazon"
+    strategy = stackline_strategy(ideation)
+
+    amazon_min = 8 if amazon_primary else 6
+    brick_min = 6
+    if strategy.get("matched"):
+        amazon_min = min(amazon_min, 5)
+        brick_min = 4
 
     return {
-        "amazon_min_results": 8 if amazon_primary else 6,
-        "brick_and_mortar_min_results": 6,
+        "amazon_min_results": amazon_min,
+        "brick_and_mortar_min_results": brick_min,
         "brand_site_min_results": 4,
     }
 
@@ -767,10 +838,21 @@ def build_research_prompt(
     evidence = build_evidence_to_collect(ideation)
     terms = ", ".join(build_query_terms(ideation)["strict"][:7])
     brands = ", ".join([entry["brand"] for entry in brand_watchlist[:6]])
+    strategy = stackline_strategy(ideation)
 
     lines = [
         f"Research competitors for ideation '{identity.get('ideation_name')}' in subcategory '{identity.get('subcategory')}'.",
         f"Primary search attributes: {terms}." if terms else None,
+        (
+            f"Stackline mode: {strategy.get('mode')}."
+            + (
+                f" Use segment '{strategy.get('segment_name')}' as the Amazon/Home Depot market anchor."
+                if strategy.get("matched")
+                else " Stackline segment is missing, so use web collection as fallback."
+            )
+        )
+        if strategy.get("expected")
+        else None,
         (
             "Pricing posture to validate: "
             f"target MSRP {format_currency(pricing.get('target_msrp'))}, "
@@ -806,11 +888,14 @@ def build_channel_plan(ideation: dict[str, Any]) -> dict[str, Any]:
         .get("performance_estimation_context", {})
     )
     feature_watchlist = build_feature_watchlist(ideation)
+    strategy = stackline_strategy(ideation)
 
     return {
         "priority": build_research_priority(ideation),
+        "collection_mode": strategy.get("mode"),
         "channel_sequence": priority_channels,
         "collection_targets": build_collection_targets(ideation),
+        "market_intelligence": strategy,
         "target_price_band": pricing.get("price_band_for_collection"),
         "must_validate": compact_dict(
             {
@@ -828,19 +913,23 @@ def build_channel_plan(ideation: dict[str, Any]) -> dict[str, Any]:
             "queries": queries["amazon"],
             "competitor_seeds": build_stackline_amazon_seeds(ideation),
             "segment_context": performance.get("segment", {}),
+            "stackline_primary": bool(strategy.get("matched")),
         },
         "brick_and_mortar": {
             "home_depot": {
                 "primary_channel": "home_depot" in priority_channels[:1],
                 "queries": queries["home_depot"],
+                "stackline_primary": bool(strategy.get("matched")),
             },
             "walmart": {
                 "primary_channel": "walmart" in priority_channels[:1],
                 "queries": queries["walmart"],
+                "stackline_primary": False,
             },
             "lowes": {
                 "primary_channel": "lowes" in priority_channels[:1],
                 "queries": queries["lowes"],
+                "stackline_primary": False,
             },
         },
         "brand_watchlist": brand_watchlist,

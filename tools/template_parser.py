@@ -55,6 +55,11 @@ SECTION_KEY_OVERRIDES = {
 }
 
 
+def stackline_expected(research_guidance: dict[str, Any]) -> bool:
+    """Treat Stackline as the default unless the workbook explicitly disables it."""
+    return research_guidance.get("stackline_data") is not False
+
+
 def normalize_header(value: Any) -> str | None:
     """Normalize a worksheet header into a stable snake_case key."""
     if value is None:
@@ -181,12 +186,27 @@ def build_stackline_context(
     include_stackline_raw: bool,
 ) -> tuple[dict[str, Any] | None, list[str]]:
     """Attach Stackline market context for ideation performance estimation."""
-    if not research_guidance.get("stackline_data"):
-        return None, []
+    if not stackline_expected(research_guidance):
+        return {
+            "enabled": False,
+            "expected": False,
+            "matched": False,
+            "mode": "web_only",
+            "fallback_mode": "web_collection_only",
+            "warnings": ["Stackline explicitly disabled for this row."],
+        }, []
 
     subcategory = identity.get("subcategory")
     if not subcategory:
-        return None, ["Stackline Data? is Yes but subcategory is blank."]
+        return {
+            "enabled": True,
+            "expected": True,
+            "matched": False,
+            "mode": "web_fallback",
+            "fallback_mode": "web_collection_only",
+            "subcategory": None,
+            "warnings": ["Stackline expected but subcategory is blank."],
+        }, ["Stackline expected but subcategory is blank."]
 
     try:
         analysis = analyze_stackline_for_subcategory(
@@ -198,21 +218,30 @@ def build_stackline_context(
     except FileNotFoundError as exc:
         return {
             "enabled": True,
+            "expected": True,
             "matched": False,
+            "mode": "web_fallback",
+            "fallback_mode": "web_collection_only",
             "subcategory": subcategory,
             "warnings": [str(exc)],
         }, [str(exc)]
     except Exception as exc:
         return {
             "enabled": True,
+            "expected": True,
             "matched": False,
+            "mode": "web_fallback",
+            "fallback_mode": "web_collection_only",
             "subcategory": subcategory,
             "warnings": [f"Stackline analysis failed: {exc}"],
         }, [f"Stackline analysis failed: {exc}"]
 
     context = {
         "enabled": True,
+        "expected": True,
         "matched": True,
+        "mode": "stackline_first",
+        "fallback_mode": "targeted_web_enrichment",
         "subcategory": subcategory,
         "segment_name": analysis.get("segment_name"),
         "matched_bundle": analysis.get("matched_bundle"),
