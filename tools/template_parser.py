@@ -51,6 +51,7 @@ LIST_FIELDS = {
 }
 SECTION_KEY_OVERRIDES = {
     "core_electrical_specs": "electrical_specs",
+    "features_and_requirements": "features_requirements",
 }
 
 

@@ -272,6 +272,20 @@ def build_feature_watchlist(ideation: dict[str, Any]) -> list[str]:
             ),
             bool_feature("smart connected", features.get("smart_connected")),
             bool_feature("linkable", features.get("linkable")),
+            f"{normalize_text(features.get('run_time'))} emergency runtime"
+            if normalize_text(features.get("run_time"))
+            else None,
+            f"{normalize_text(features.get('charge_time'))} charge time"
+            if normalize_text(features.get("charge_time"))
+            else None,
+            f"{normalize_text(features.get('switching_time'))} switching time"
+            if normalize_text(features.get("switching_time"))
+            else None,
+            normalize_text(features.get("bulb_base_type")),
+            normalize_text(features.get("bulb_shape")),
+            f"{normalize_text(features.get('beam_angle'))} beam angle"
+            if normalize_text(features.get("beam_angle"))
+            else None,
             normalize_text(physical.get("moisture_rating")),
             normalize_text(physical.get("ip_rating")),
             normalize_text(features.get("additional_features")),
