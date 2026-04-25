@@ -44,6 +44,19 @@ def normalize_text(value: Any) -> str | None:
     return text or None
 
 
+def normalized_compare_text(value: Any) -> str:
+    """Normalize free text for loose feature/certification matching."""
+    text = (normalize_text(value) or "").lower()
+    text = text.replace("0-10v", "0 10v")
+    text = text.replace("back-up", "backup").replace("back up", "backup")
+    text = text.replace("re-charge", "recharge")
+    text = re.sub(r"[-/]", " ", text)
+    text = re.sub(r"\bmins?\b", "minutes", text)
+    text = re.sub(r"\bhrs?\b", "hours", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 def compact_dict(data: dict[str, Any]) -> dict[str, Any]:
     """Drop empty values from a dict."""
     return {
@@ -611,25 +624,39 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
 
 def feature_matches(item: dict[str, Any], label: str) -> bool:
     """Apply lightweight feature matching heuristics."""
-    lowered = label.lower()
-    title = (normalize_text(item.get("product_title")) or "").lower()
-    features = " ".join(item.get("features", [])).lower()
-    dimming_type = (normalize_text(item.get("dimming_type")) or "").lower()
+    lowered = normalized_compare_text(label)
+    title = normalized_compare_text(item.get("product_title"))
+    features = normalized_compare_text(" ".join(item.get("features", [])))
+    dimming_type = normalized_compare_text(item.get("dimming_type"))
 
     if "0-10v" in lowered:
-        return "0-10v" in title or "0-10v" in features or dimming_type == "0-10v"
+        return "0 10v" in title or "0 10v" in features or dimming_type == "0 10v"
     if "dimm" in lowered:
         return item.get("dimmable") is True or "dimmable" in title or "dimmable" in features
     if "motion sensor" in lowered:
         return "motion sensor" in title or "motion sensor" in features or "sensor receptacle" in title
     if "auto dim" in lowered or "daylight" in lowered:
         return "auto dim" in title or "daylight" in title or "auto dim" in features
+    if "emergency battery backup" in lowered:
+        haystack = f"{title} {features}"
+        return "battery backup" in haystack or "emergency battery" in haystack
+    if "90 minutes" in lowered and "runtime" in lowered:
+        haystack = f"{title} {features}"
+        return bool(re.search(r"\b90\b.*\bminute", haystack))
+    if "24 hours" in lowered and "charge time" in lowered:
+        haystack = f"{title} {features}"
+        return bool(re.search(r"\b24\b.*\bhour", haystack)) and (
+            "charge" in haystack or "recharge" in haystack
+        )
+    if "switching time" in lowered:
+        haystack = f"{title} {features}"
+        return "switching time" in haystack or "instant on" in haystack
     if "selectable wattage" in lowered:
         return "/" in (normalize_text(item.get("wattage")) or "") or "selectable wattage" in features
     if "selectable cct" in lowered:
         return "/" in (normalize_text(item.get("cct")) or "") or "selectable cct" in features
     if lowered in {"dry", "damp", "wet"}:
-        return lowered in title or f"{lowered} rated" in features
+        return lowered in title or lowered in features or f"{lowered} rated" in features
     if lowered.startswith("ip"):
         return lowered in title or lowered in features
 
@@ -642,11 +669,13 @@ def feature_matches(item: dict[str, Any], label: str) -> bool:
 
 def certification_matches(item: dict[str, Any], label: str) -> bool:
     """Match certification labels against normalized certification fields."""
-    lowered = label.lower()
-    certifications = [normalize_text(value) or "" for value in item.get("certifications", [])]
-    if any(lowered == value.lower() for value in certifications):
+    lowered = normalized_compare_text(label)
+    certifications = [normalized_compare_text(value) for value in item.get("certifications", [])]
+    if any(lowered == value for value in certifications):
         return True
-    title = (normalize_text(item.get("product_title")) or "").lower()
+    if any(lowered in value for value in certifications):
+        return True
+    title = normalized_compare_text(item.get("product_title"))
     return lowered in title
 
 
