@@ -24,6 +24,7 @@ planStatus:
 | **Output format** | Excel (.xlsx) — **one sheet per ideation** with custom-tailored layout |
 | **Output delivery** | SharePoint: `Manny Tools/Research Reports/` |
 | **Vendor identification** | Redshift/Postgres MCP query (not CSV lookup) |
+| **Reference baseline fallback** | If Postgres payloads are unavailable, use local metadata variant price plus local Shopify/Amazon sales exports as a clearly labeled fallback source |
 | **Research depth** | All 6 known competitors + Amazon/Home Depot/Walmart — users accept wait time |
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
@@ -215,6 +216,8 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 
 ### Step 2: Reference SKU Lightweight Lookup
 **Goal:** Script that takes a Reference SKU and returns only what's needed — the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We only pull baseline context, not full specs.
+
+**Fallback behavior:** Postgres MCP remains the preferred source for current listing price and last-12-month channel sales, but the tool can now fall back to local metadata + Shopify/Amazon sales exports when MCP payloads are unavailable. Fallback values must stay clearly labeled in the report.
 
 **What we pull (and why):**
 | Data | Source | Why |

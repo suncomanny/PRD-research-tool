@@ -539,13 +539,19 @@ def build_reference_baseline(ideation: dict[str, Any]) -> dict[str, Any] | None:
         {
             "sku": reference.get("sku"),
             "title": reference.get("title"),
+            "title_source": reference.get("title_source"),
             "product_type": reference.get("product_type"),
             "image_url": reference.get("image_url"),
             "listing_price": reference.get("listing_price"),
+            "listing_price_source": reference.get("listing_price_source"),
             "shopify_revenue_12mo": reference.get("shopify_revenue_12mo"),
             "shopify_units_12mo": reference.get("shopify_units_12mo"),
+            "shopify_data_source": reference.get("shopify_data_source"),
             "amazon_revenue_12mo": reference.get("amazon_revenue_12mo"),
             "amazon_units_12mo": reference.get("amazon_units_12mo"),
+            "amazon_data_source": reference.get("amazon_data_source"),
+            "sales_period_label": reference.get("sales_period_label"),
+            "reference_data_source": reference.get("reference_data_source"),
         }
     )
 

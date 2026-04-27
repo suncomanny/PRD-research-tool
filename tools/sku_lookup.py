@@ -20,6 +20,7 @@ import os
 import re
 import sys
 from datetime import date
+from functools import lru_cache
 
 import pandas as pd
 
@@ -34,6 +35,9 @@ RESOURCES_DIR = os.path.join(
     "Resources",
 )
 METADATA_FILE = "SUNCO ALL METADATA.csv"
+SHOPIFY_SALES_FILE = "SUNCO 2025 ALL SALES Shopify - Categorized.csv"
+AMAZON_SALES_FILE = "FULL SUNCO 2025 SALES Amazon.csv"
+LOCAL_SALES_PERIOD_LABEL = "FY2025 local export fallback"
 
 
 def strip_pack_suffix(sku: str) -> str:
@@ -57,6 +61,49 @@ def extract_pack_count(sku: str) -> int:
     return int(m.group(1)) if m else 1
 
 
+def parse_currency_value(value) -> float | None:
+    """Parse a currency-like value into a float."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    text = str(value).strip()
+    if not text or text in {"$-", "$- ", "-", "nan", "None"}:
+        return None
+
+    text = text.replace("$", "").replace(",", "").strip()
+    negative = text.startswith("(") and text.endswith(")")
+    if negative:
+        text = text[1:-1]
+
+    try:
+        parsed = float(text)
+    except ValueError:
+        return None
+    return -parsed if negative else parsed
+
+
+def handle_to_title(handle: str | None) -> str | None:
+    """Convert a Shopify handle slug into a readable title."""
+    if not handle:
+        return None
+    text = str(handle).strip().replace("-", " ")
+    text = re.sub(r"\s+", " ", text)
+    return text.title() if text else None
+
+
+def title_is_usable(title: str | None) -> bool:
+    """Reject obviously bad fallback titles like '2' or other placeholder slugs."""
+    if not title or not isinstance(title, str):
+        return False
+    cleaned = title.strip()
+    if len(cleaned) < 4:
+        return False
+    return bool(re.search(r"[A-Za-z]", cleaned))
+
+
+@lru_cache(maxsize=1)
 def load_metadata() -> pd.DataFrame:
     """Load metadata CSV and add family + pack columns."""
     path = os.path.join(RESOURCES_DIR, METADATA_FILE)
@@ -72,6 +119,160 @@ def load_metadata() -> pd.DataFrame:
     return df
 
 
+@lru_cache(maxsize=1)
+def load_shopify_sales() -> pd.DataFrame:
+    """Load Shopify sales export and normalize SKU family columns."""
+    path = os.path.join(RESOURCES_DIR, SHOPIFY_SALES_FILE)
+    if not os.path.exists(path):
+        return pd.DataFrame()
+
+    df = pd.read_csv(path, engine='python', on_bad_lines='skip')
+    if 'Product variant SKU' not in df.columns:
+        return pd.DataFrame()
+
+    df['Product variant SKU'] = df['Product variant SKU'].astype(str).str.strip()
+    df['family'] = df['Product variant SKU'].apply(
+        lambda x: strip_pack_suffix(str(x)).upper() if pd.notna(x) else ''
+    )
+    if 'Net sales' in df.columns:
+        df['Net sales parsed'] = df['Net sales'].apply(parse_currency_value)
+    else:
+        df['Net sales parsed'] = None
+    if 'Net items sold' in df.columns:
+        df['Net items sold parsed'] = pd.to_numeric(df['Net items sold'], errors='coerce')
+    else:
+        df['Net items sold parsed'] = None
+    return df
+
+
+@lru_cache(maxsize=1)
+def load_amazon_sales() -> pd.DataFrame:
+    """Load Amazon sales export and normalize SKU family columns."""
+    path = os.path.join(RESOURCES_DIR, AMAZON_SALES_FILE)
+    if not os.path.exists(path):
+        return pd.DataFrame()
+
+    df = pd.read_csv(path, engine='python', on_bad_lines='skip')
+    if 'SKU' not in df.columns:
+        return pd.DataFrame()
+
+    df['SKU'] = df['SKU'].astype(str).str.strip()
+    df['family'] = df['SKU'].apply(
+        lambda x: strip_pack_suffix(str(x)).upper() if pd.notna(x) else ''
+    )
+    sales_column = 'Sales ' if 'Sales ' in df.columns else 'Sales'
+    if sales_column in df.columns:
+        df['Sales parsed'] = df[sales_column].apply(parse_currency_value)
+    else:
+        df['Sales parsed'] = None
+    if 'Units' in df.columns:
+        df['Units parsed'] = pd.to_numeric(df['Units'], errors='coerce')
+    else:
+        df['Units parsed'] = None
+    return df
+
+
+def summarize_local_sales(
+    sales_df: pd.DataFrame,
+    family: str,
+    revenue_column: str,
+    units_column: str,
+    title_column: str,
+) -> dict[str, float | str | None]:
+    """Aggregate one local sales export by SKU family."""
+    if sales_df.empty:
+        return {
+            "revenue": None,
+            "units": None,
+            "title": None,
+        }
+
+    family_rows = sales_df[sales_df['family'] == family]
+    if family_rows.empty:
+        return {
+            "revenue": None,
+            "units": None,
+            "title": None,
+        }
+
+    revenue = family_rows[revenue_column].dropna().sum()
+    units = family_rows[units_column].dropna().sum()
+
+    title = None
+    for candidate in family_rows.get(title_column, pd.Series(dtype=object)).tolist():
+        if isinstance(candidate, str) and candidate.strip():
+            title = candidate.strip()
+            break
+
+    return {
+        "revenue": float(revenue) if pd.notna(revenue) else None,
+        "units": float(units) if pd.notna(units) else None,
+        "title": title,
+    }
+
+
+def apply_local_fallbacks(result: dict, row: pd.Series | None) -> dict:
+    """Fill reference baseline fields from local metadata + sales exports."""
+    family = str(result.get("family") or "").upper()
+    fallback_used = False
+
+    if row is not None:
+        variant_price = parse_currency_value(row.get('Variant Price'))
+        if result.get('listing_price') is None and variant_price is not None:
+            result['listing_price'] = variant_price
+            result['listing_price_source'] = 'metadata_variant_price'
+            fallback_used = True
+
+        if not result.get('title'):
+            title_from_handle = handle_to_title(result.get('handle'))
+            if title_is_usable(title_from_handle):
+                result['title'] = title_from_handle
+                result['title_source'] = 'metadata_handle'
+                fallback_used = True
+
+    shopify_summary = summarize_local_sales(
+        load_shopify_sales(),
+        family=family,
+        revenue_column='Net sales parsed',
+        units_column='Net items sold parsed',
+        title_column='Product title',
+    )
+    amazon_summary = summarize_local_sales(
+        load_amazon_sales(),
+        family=family,
+        revenue_column='Sales parsed',
+        units_column='Units parsed',
+        title_column='Name',
+    )
+
+    local_title = shopify_summary.get('title') or amazon_summary.get('title')
+    if local_title and (
+        not title_is_usable(result.get('title'))
+        or result.get('title_source') == 'metadata_handle'
+    ):
+        result['title'] = local_title
+        result['title_source'] = 'local_sales_export'
+        fallback_used = True
+
+    if result.get('shopify_revenue_12mo') is None and shopify_summary.get('revenue') is not None:
+        result['shopify_revenue_12mo'] = shopify_summary['revenue']
+        result['shopify_units_12mo'] = shopify_summary.get('units')
+        result['shopify_data_source'] = 'shopify_sales_csv'
+        fallback_used = True
+
+    if result.get('amazon_revenue_12mo') is None and amazon_summary.get('revenue') is not None:
+        result['amazon_revenue_12mo'] = amazon_summary['revenue']
+        result['amazon_units_12mo'] = amazon_summary.get('units')
+        result['amazon_data_source'] = 'amazon_sales_csv'
+        fallback_used = True
+
+    if fallback_used:
+        result.setdefault('sales_period_label', LOCAL_SALES_PERIOD_LABEL)
+        result.setdefault('reference_data_source', 'local_metadata_and_sales_exports')
+
+    return result
+
+
 def lookup_from_csv(sku: str) -> dict:
     """Look up image URL and title from metadata CSV."""
     metadata_df = load_metadata()
@@ -85,7 +286,7 @@ def lookup_from_csv(sku: str) -> dict:
         row = find_smallest_pack_sku(metadata_df, family)
 
     if row is None:
-        return {
+        result = {
             "sku": sku,
             "family": family,
             "found": False,
@@ -93,7 +294,13 @@ def lookup_from_csv(sku: str) -> dict:
             "title": None,
             "product_type": None,
             "handle": None,
+            "listing_price": None,
+            "shopify_revenue_12mo": None,
+            "shopify_units_12mo": None,
+            "amazon_revenue_12mo": None,
+            "amazon_units_12mo": None,
         }
+        return apply_local_fallbacks(result, None)
 
     # Extract image URL — use Image Src column
     image_url = row.get('Image Src')
@@ -110,15 +317,16 @@ def lookup_from_csv(sku: str) -> dict:
     if pd.isna(product_type) if isinstance(product_type, float) else not product_type:
         product_type = None
 
-    return {
+    result = {
         "sku": sku,
         "family": family,
         "found": True,
         "image_url": str(image_url) if image_url else None,
-        "title": None,  # Title comes from Postgres (shopify_shopifyproduct.title)
+        "title": None,  # Prefer Postgres title when available; local fallbacks fill this otherwise.
         "product_type": str(product_type) if product_type else None,
         "handle": str(handle) if handle else None,
     }
+    return apply_local_fallbacks(result, row)
 
 
 def merge_postgres_data(csv_result: dict, postgres_data: dict) -> dict:
@@ -130,13 +338,28 @@ def merge_postgres_data(csv_result: dict, postgres_data: dict) -> dict:
         result['title'] = postgres_data['title']
 
     # Listing price
-    result['listing_price'] = postgres_data.get('listing_price')
+    if postgres_data.get('listing_price') is not None:
+        result['listing_price'] = postgres_data.get('listing_price')
+        result['listing_price_source'] = 'postgres_mcp'
 
     # Sales split by channel — ALWAYS separate
-    result['shopify_revenue_12mo'] = postgres_data.get('shopify_revenue')
-    result['shopify_units_12mo'] = postgres_data.get('shopify_units')
-    result['amazon_revenue_12mo'] = postgres_data.get('amazon_revenue')
-    result['amazon_units_12mo'] = postgres_data.get('amazon_units')
+    if postgres_data.get('shopify_revenue') is not None:
+        result['shopify_revenue_12mo'] = postgres_data.get('shopify_revenue')
+        result['shopify_data_source'] = 'postgres_mcp'
+    if postgres_data.get('shopify_units') is not None:
+        result['shopify_units_12mo'] = postgres_data.get('shopify_units')
+    if postgres_data.get('amazon_revenue') is not None:
+        result['amazon_revenue_12mo'] = postgres_data.get('amazon_revenue')
+        result['amazon_data_source'] = 'postgres_mcp'
+    if postgres_data.get('amazon_units') is not None:
+        result['amazon_units_12mo'] = postgres_data.get('amazon_units')
+
+    if any(
+        postgres_data.get(key) is not None
+        for key in ('listing_price', 'shopify_revenue', 'amazon_revenue')
+    ):
+        result['reference_data_source'] = 'postgres_mcp_plus_metadata'
+        result['sales_period_label'] = 'Last 12 complete months via Postgres MCP'
 
     return result
 

@@ -470,9 +470,17 @@ def render_row_sheet(
             ("Launch Outlook", performance.get("launch_outlook")),
             ("Confidence", performance.get("confidence")),
             ("Reference Title", reference.get("title")),
+            ("Reference Title Source", reference.get("title_source")),
             ("Reference Listing Price", reference.get("listing_price")),
+            ("Listing Price Source", reference.get("listing_price_source")),
             ("Shopify Revenue 12mo", reference.get("shopify_revenue_12mo")),
+            ("Shopify Units 12mo", reference.get("shopify_units_12mo")),
+            ("Shopify Data Source", reference.get("shopify_data_source")),
             ("Amazon Revenue 12mo", reference.get("amazon_revenue_12mo")),
+            ("Amazon Units 12mo", reference.get("amazon_units_12mo")),
+            ("Amazon Data Source", reference.get("amazon_data_source")),
+            ("Reference Data Source", reference.get("reference_data_source")),
+            ("Reference Sales Period", reference.get("sales_period_label")),
         ],
     )
     row = merged_text_row(ws, row, "Reference Image URL", reference.get("image_url"))
