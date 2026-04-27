@@ -68,6 +68,13 @@ NOISE_TOKENS = {
     "lowe",
 }
 DATE_TOKEN_RE = re.compile(r"^\d{4}(?:-\d{2})?$|^\d{6,8}$")
+RETAILER_SCOPE_PRIORITY = {
+    "all_retailers": 4,
+    "amazon": 3,
+    "home_depot": 2,
+    "walmart": 1,
+    "lowes": 1,
+}
 
 
 @dataclass
@@ -113,6 +120,11 @@ def infer_retailer_scope(value: str | None) -> str | None:
         if alias in normalized:
             return scope
     return None
+
+
+def retailer_scope_key(value: str | None) -> str:
+    """Normalize retailer scope into a stable channel key."""
+    return value or "all_retailers"
 
 
 def infer_period_from_dates(values: pd.Series | list[Any]) -> str | None:
@@ -311,6 +323,12 @@ def segment_match_score(subcategory: str, segment_slug: str, segment_name: str |
 
 def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
     """Find the newest matching Stackline bundle for a subcategory."""
+    bundles = discover_bundles(folder, subcategory)
+    return bundles[0]
+
+
+def discover_bundles(folder: Path, subcategory: str) -> list[StacklineBundle]:
+    """Find the best matching Stackline bundles for each retailer scope."""
     bundles: dict[tuple[str, str, str], StacklineBundle] = {}
 
     for path in folder.iterdir():
@@ -361,47 +379,74 @@ def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
             bundle.match_score,
             bool(bundle.traffic_path),
             bool(bundle.sales_path),
+            RETAILER_SCOPE_PRIORITY.get(retailer_scope_key(bundle.retailer_scope), 0),
             bundle.period,
         ),
         reverse=True,
     )
-    best = ranked[0]
-    if best.match_score <= 0:
+    if not ranked or ranked[0].match_score <= 0:
         raise FileNotFoundError(
             f"No Stackline bundle could be matched to subcategory '{subcategory}'."
         )
 
-    compatible = [
-        bundle
-        for bundle in bundles.values()
-        if bundle is not best
-        and bundle.period == best.period
-        and (bundle.retailer_scope or "") == (best.retailer_scope or "")
-        and bundle.match_score > 0
-    ]
-    if not best.traffic_path:
-        traffic_donor = next(
-            (
-                bundle
-                for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
-                if bundle.traffic_path
-            ),
-            None,
+    selected_by_scope: dict[str, StacklineBundle] = {}
+    for bundle in ranked:
+        if bundle.match_score <= 0 or not bundle.summary_path:
+            continue
+        scope = retailer_scope_key(bundle.retailer_scope)
+        if scope not in selected_by_scope:
+            selected_by_scope[scope] = bundle
+
+    if not selected_by_scope:
+        raise FileNotFoundError(
+            f"Matched Stackline exports for '{subcategory}' did not include a usable summary CSV."
         )
-        if traffic_donor:
-            best.traffic_path = traffic_donor.traffic_path
-    if not best.sales_path:
-        sales_donor = next(
-            (
-                bundle
-                for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
-                if bundle.sales_path
-            ),
-            None,
-        )
-        if sales_donor:
-            best.sales_path = sales_donor.sales_path
-    return best
+
+    selected = list(selected_by_scope.values())
+    for selected_bundle in selected:
+        compatible = [
+            bundle
+            for bundle in bundles.values()
+            if bundle is not selected_bundle
+            and bundle.period == selected_bundle.period
+            and retailer_scope_key(bundle.retailer_scope)
+            == retailer_scope_key(selected_bundle.retailer_scope)
+            and bundle.match_score > 0
+        ]
+        if not selected_bundle.traffic_path:
+            traffic_donor = next(
+                (
+                    bundle
+                    for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
+                    if bundle.traffic_path
+                ),
+                None,
+            )
+            if traffic_donor:
+                selected_bundle.traffic_path = traffic_donor.traffic_path
+        if not selected_bundle.sales_path:
+            sales_donor = next(
+                (
+                    bundle
+                    for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
+                    if bundle.sales_path
+                ),
+                None,
+            )
+            if sales_donor:
+                selected_bundle.sales_path = sales_donor.sales_path
+
+    return sorted(
+        selected,
+        key=lambda bundle: (
+            RETAILER_SCOPE_PRIORITY.get(retailer_scope_key(bundle.retailer_scope), 0),
+            bundle.match_score,
+            bool(bundle.traffic_path),
+            bool(bundle.sales_path),
+            bundle.period,
+        ),
+        reverse=True,
+    )
 
 
 def load_summary(path: Path) -> pd.DataFrame:
@@ -920,6 +965,117 @@ def analyze_stackline_for_subcategory(
         subcategory=subcategory,
         match_bundle=bundle,
     )
+
+
+def build_channel_comparison(
+    channel_results: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Summarize channel-level Stackline comparisons for packet/report use."""
+    channel_summary: dict[str, Any] = {}
+    for channel, result in channel_results.items():
+        perf = result.get("performance_estimation_context") or {}
+        segment = perf.get("segment") or {}
+        snapshot = segment.get("market_snapshot") or {}
+        momentum = segment.get("market_momentum_pct") or {}
+        sunco_position = perf.get("sunco_position") or {}
+        channel_summary[channel] = {
+            "segment_name": segment.get("name"),
+            "retailer_scope": segment.get("retailer_scope") or channel,
+            "matched_bundle": segment.get("matched_bundle"),
+            "retail_sales": snapshot.get("retail_sales"),
+            "units_sold": snapshot.get("units_sold"),
+            "avg_retail_price": snapshot.get("avg_retail_price"),
+            "total_traffic": snapshot.get("total_traffic"),
+            "conversion_rate_pct": snapshot.get("conversion_rate_pct"),
+            "retail_sales_growth_pct": momentum.get("retail_sales"),
+            "units_sold_growth_pct": momentum.get("units_sold"),
+            "avg_retail_price_growth_pct": momentum.get("avg_retail_price"),
+            "traffic_growth_pct": momentum.get("traffic"),
+            "sunco_sales_share_pct": sunco_position.get("sales_share_pct"),
+            "sunco_units_share_pct": sunco_position.get("units_share_pct"),
+            "warnings": result.get("warnings", []),
+        }
+
+    comparisons: dict[str, Any] = {}
+    amazon = channel_summary.get("amazon")
+    home_depot = channel_summary.get("home_depot")
+    if amazon and home_depot:
+        comparisons["amazon_vs_home_depot"] = {
+            "avg_retail_price_gap_pct": clean_number(
+                pct_delta(amazon.get("avg_retail_price"), home_depot.get("avg_retail_price"))
+            ),
+            "retail_sales_gap_pct": clean_number(
+                pct_delta(amazon.get("retail_sales"), home_depot.get("retail_sales"))
+            ),
+            "units_sold_gap_pct": clean_number(
+                pct_delta(amazon.get("units_sold"), home_depot.get("units_sold"))
+            ),
+            "sunco_sales_share_gap_pct_points": clean_number(
+                pct_point_gap(
+                    amazon.get("sunco_sales_share_pct"),
+                    home_depot.get("sunco_sales_share_pct"),
+                )
+            ),
+        }
+
+    return {
+        "available_channels": list(channel_summary.keys()),
+        "channels": channel_summary,
+        "comparisons": comparisons,
+    }
+
+
+def analyze_stackline_channels_for_subcategory(
+    subcategory: str,
+    reference_sku: str | None = None,
+    folder: Path = STACKLINE_DIR,
+    brand_name: str = "Sunco Lighting",
+) -> dict[str, Any]:
+    """Discover and analyze all matching retailer-scoped Stackline bundles for a subcategory."""
+    bundles = discover_bundles(folder, subcategory)
+    primary_bundle = bundles[0]
+    channel_results: dict[str, dict[str, Any]] = {}
+    for bundle in bundles:
+        if not bundle.summary_path:
+            continue
+        result = analyze_stackline(
+            summary_path=bundle.summary_path,
+            traffic_path=bundle.traffic_path,
+            sales_path=bundle.sales_path,
+            brand_name=brand_name,
+            reference_sku=reference_sku,
+            subcategory=subcategory,
+            match_bundle=bundle,
+        )
+        channel_results[retailer_scope_key(bundle.retailer_scope)] = result
+
+    if not channel_results:
+        raise FileNotFoundError(
+            f"No Stackline bundle could be matched to subcategory '{subcategory}'."
+        )
+
+    primary_key = retailer_scope_key(primary_bundle.retailer_scope)
+    primary_result = channel_results[primary_key]
+    comparison = build_channel_comparison(channel_results)
+    warnings = []
+    for result in channel_results.values():
+        warnings.extend(result.get("warnings", []))
+
+    return {
+        "subcategory": subcategory,
+        "segment_name": primary_result.get("segment_name"),
+        "primary_channel": primary_key,
+        "primary_analysis": primary_result,
+        "channels": {
+            channel: {
+                "analysis": result,
+                "performance_estimation_context": result.get("performance_estimation_context"),
+            }
+            for channel, result in channel_results.items()
+        },
+        "channel_comparison": comparison,
+        "warnings": list(dict.fromkeys(warnings)),
+    }
 
 
 def main() -> None:

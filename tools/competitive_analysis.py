@@ -921,7 +921,11 @@ def build_performance_estimation(
     non_seed_candidates: int,
 ) -> dict[str, Any]:
     """Summarize row-level performance outlook using packet + normalized data."""
-    market_context = as_dict(as_dict(packet.get("market_context")).get("performance_estimation_context"))
+    packet_market_context = as_dict(packet.get("market_context"))
+    market_context = as_dict(packet_market_context.get("performance_estimation_context"))
+    channel_comparison = as_dict(packet_market_context.get("channel_comparison"))
+    channel_snapshots = as_dict(channel_comparison.get("channels"))
+    channel_delta = as_dict(as_dict(channel_comparison.get("comparisons")).get("amazon_vs_home_depot"))
     demand_hypothesis = as_dict(as_dict(packet.get("estimation_focus")).get("demand_hypothesis"))
     segment = as_dict(market_context.get("segment"))
     segment_snapshot = as_dict(segment.get("market_snapshot"))
@@ -944,6 +948,14 @@ def build_performance_estimation(
         rationale.append(f"Sunco sales share in the segment is {sunco_share:.2f}%.")
     if reference_family.get("found") is False:
         rationale.append("The exact reference family is absent from the current Stackline segment bundle.")
+    if parse_number(channel_delta.get("avg_retail_price_gap_pct")) is not None:
+        rationale.append(
+            f"Amazon average retail price is {parse_number(channel_delta.get('avg_retail_price_gap_pct')):.2f}% above Home Depot for the matched Stackline segment."
+        )
+    if parse_number(channel_delta.get("retail_sales_gap_pct")) is not None:
+        rationale.append(
+            f"Amazon segment sales are {parse_number(channel_delta.get('retail_sales_gap_pct')):.2f}% above Home Depot for this segment."
+        )
     if non_seed_candidates == 0 and total_candidates > 0:
         rationale.append("Current analysis is seeded from Stackline competitors only; channel collection is still pending.")
 
@@ -961,6 +973,13 @@ def build_performance_estimation(
                     "segment_units_growth_pct": parse_number(demand_hypothesis.get("segment_units_growth_pct")),
                     "sunco_sales_share_pct": parse_number(sunco_position.get("sales_share_pct")),
                     "reference_family_found_in_stackline": reference_family.get("found"),
+                }
+            ),
+            "channel_comparison": compact_dict(
+                {
+                    "available_channels": list(channel_snapshots.keys()) if channel_snapshots else None,
+                    "channels": channel_snapshots,
+                    "comparisons": as_dict(channel_comparison.get("comparisons")),
                 }
             ),
             "rationale": rationale,

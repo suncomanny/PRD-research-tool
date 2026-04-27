@@ -18,7 +18,10 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from stackline_analyzer import STACKLINE_DIR, analyze_stackline_for_subcategory
+from stackline_analyzer import (
+    STACKLINE_DIR,
+    analyze_stackline_channels_for_subcategory,
+)
 from sku_lookup import build_mcp_queries, lookup_from_csv, merge_postgres_data
 
 
@@ -209,7 +212,7 @@ def build_stackline_context(
         }, ["Stackline expected but subcategory is blank."]
 
     try:
-        analysis = analyze_stackline_for_subcategory(
+        stackline_batch = analyze_stackline_channels_for_subcategory(
             subcategory=str(subcategory),
             reference_sku=reference_sku,
             folder=stackline_folder,
@@ -236,6 +239,19 @@ def build_stackline_context(
             "warnings": [f"Stackline analysis failed: {exc}"],
         }, [f"Stackline analysis failed: {exc}"]
 
+    analysis = stackline_batch.get("primary_analysis") or {}
+    channels = stackline_batch.get("channels") or {}
+    channel_performance = {
+        channel: payload.get("performance_estimation_context")
+        for channel, payload in channels.items()
+        if payload.get("performance_estimation_context")
+    }
+    channel_files = {
+        channel: (payload.get("analysis") or {}).get("files")
+        for channel, payload in channels.items()
+        if (payload.get("analysis") or {}).get("files")
+    }
+
     context = {
         "enabled": True,
         "expected": True,
@@ -243,13 +259,30 @@ def build_stackline_context(
         "mode": "stackline_first",
         "fallback_mode": "targeted_web_enrichment",
         "subcategory": subcategory,
+        "primary_channel": stackline_batch.get("primary_channel"),
         "segment_name": analysis.get("segment_name"),
         "matched_bundle": analysis.get("matched_bundle"),
         "files": analysis.get("files"),
+        "channel_files": channel_files,
         "performance_estimation_context": analysis.get("performance_estimation_context"),
+        "channel_performance_estimation_contexts": channel_performance,
+        "channel_comparison": stackline_batch.get("channel_comparison"),
+        "channels": {
+            channel: {
+                "matched_bundle": (payload.get("analysis") or {}).get("matched_bundle"),
+                "files": (payload.get("analysis") or {}).get("files"),
+                "performance_estimation_context": payload.get("performance_estimation_context"),
+            }
+            for channel, payload in channels.items()
+        },
+        "warnings": stackline_batch.get("warnings", []),
     }
     if include_stackline_raw:
         context["raw_analysis"] = analysis
+        context["channel_raw_analysis"] = {
+            channel: payload.get("analysis")
+            for channel, payload in channels.items()
+        }
 
     return context, []
 

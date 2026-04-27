@@ -8,6 +8,7 @@ Step 4 is the most token-intensive part of the tool. The work is intentionally s
 
 - `4A` Packet generation: build one ideation packet per row with search targets, pricing hypotheses, demand hypotheses, and channel order.
 - Stackline is the default market-intelligence layer for Amazon and Home Depot when a matching segment bundle exists. Web collection is primarily for spec enrichment and uncovered channels.
+- When both Amazon and Home Depot Stackline bundles exist for the same subcategory, keep both bundles and pass their channel snapshots forward for side-by-side comparison instead of collapsing them into one market view.
 - If Stackline is expected but no matching segment bundle exists, the packet must explicitly fall back to web collection instead of silently behaving like a no-Stackline row.
 - `4B` Resumable workspace: initialize a shared session folder with packets, schemas, placeholders, instructions, and a manifest.
 - `4C` Amazon collection: collect raw Amazon competitor candidates only.
@@ -147,10 +148,12 @@ Use `instructions/STEP4_PROMPT.md` as the one-task template for raw collection. 
 - Raw collection files must stay raw. No dedupe or recommendation logic belongs there.
 - When a packet says `collection_mode = stackline_first`, use Stackline seeds and market context as the primary Amazon/Home Depot anchor, and use web pages mainly to enrich missing attributes.
 - Stackline file discovery should prefer the standard `Stackline_[Segment]_[YYYY-MM]_[type].csv` naming convention, but valid CSVs must still be recoverable by schema, segment label, and retailer scope when filenames are inconsistent.
+- When multiple retailer-scoped Stackline bundles are available, preserve the separate channel contexts (`amazon`, `home_depot`, etc.) through packet generation, analysis, and reporting so channel comparisons remain explicit.
 - When a packet says `collection_mode = web_fallback`, Stackline was expected but missing; treat Amazon/Home Depot conclusions as provisional and collect directly from the web.
 - Price enrichment may append missing prices and extraction notes to raw files, but it must not delete or restructure valid raw competitor entries.
 - Normalized files are the first place where products become comparable across channels.
 - Analysis files are where pricing targets, spec gaps, and performance-estimation logic get applied.
+- Reports should show the retained Stackline channel snapshots when they exist so PMs can compare Amazon and Home Depot pricing and segment size without re-running the pipeline.
 - The manifest is the source of truth for what is done next.
 - Stackline packet seeds can be carried into normalized files before raw collection finishes, but those rows should still be treated as in-progress until real collection artifacts arrive.
 - Analysis files can be written before raw collection is complete, but they must stay clearly provisional until non-seed competitor collection exists.

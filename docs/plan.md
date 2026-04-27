@@ -9,8 +9,8 @@ planStatus:
   stakeholders: [Jesse Harper, Stephanie Barrera, Nelson Chu]
   tags: [tool-building, prd, competitive-research, category-agnostic]
   created: "2026-04-10"
-  updated: "2026-04-23T18:30:00.000Z"
-  progress: 9
+  updated: "2026-04-27T14:45:00.000Z"
+  progress: 10
 ---
 
 # PRD Research Tool - Ideation Template + Competitive Research Engine
@@ -28,7 +28,7 @@ planStatus:
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
 | **Runtime** | Node.js (matching PRD Generator pattern: `xlsx` + `docx` npm packages + SharePoint Graph API) |
-| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context and falls back to web collection if a matching segment file is missing |
+| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context, preserves retailer-scoped bundles side by side for channel comparison, and falls back to web collection if a matching segment file is missing |
 | **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\` |
 | **Stackline naming convention** | Preferred: `Stackline_[StacklineSegment]_[YYYY-MM]_[type].csv` (type = summary, traffic, or sales). Fallback: valid Stackline CSVs can still be discovered by schema, segment label, and retailer scope when teammates upload inconsistent filenames. |
 
@@ -272,7 +272,9 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - Parse `_traffic` CSV as the supplemental source for total traffic and derived conversion rate
   - Treat `_sales` CSV as secondary / optional until its schema is confirmed across multiple segments
   - Preserve retailer scope (`amazon`, `home_depot`, etc.) so retailer-specific Stackline bundles are not treated like an all-retailer market view
+  - Preserve multiple retailer-scoped bundles for the same subcategory so Amazon and Home Depot can be compared side by side instead of forcing one "winner" bundle
   - Merge into the ideation performance-estimation context, not just the raw competitor dump
+  - Surface channel comparison snapshots in packets, analysis outputs, and reports so PMs can compare Amazon vs Home Depot price bands, sales, units, and Sunco share
   - If no matching Stackline bundle is found, mark the row as `web_fallback` and continue with web collection instead of failing
 - [ ] Git checkpoint: "Step 4 - Research engine working"
 

@@ -74,6 +74,7 @@ def stackline_strategy(ideation: dict[str, Any]) -> dict[str, Any]:
     stackline = ideation.get("stackline_context") or {}
     expected = bool(stackline.get("expected"))
     matched = bool(stackline.get("matched"))
+    available_channels = list((stackline.get("channel_performance_estimation_contexts") or {}).keys())
 
     if matched:
         return compact_dict(
@@ -82,8 +83,11 @@ def stackline_strategy(ideation: dict[str, Any]) -> dict[str, Any]:
                 "matched": True,
                 "mode": "stackline_first",
                 "fallback_mode": stackline.get("fallback_mode") or "targeted_web_enrichment",
+                "primary_channel": stackline.get("primary_channel"),
+                "available_channels": available_channels,
                 "segment_name": stackline.get("segment_name"),
                 "matched_bundle": stackline.get("matched_bundle"),
+                "channel_comparison": stackline.get("channel_comparison"),
                 "warnings": stackline.get("warnings"),
             }
         )
@@ -107,6 +111,26 @@ def stackline_strategy(ideation: dict[str, Any]) -> dict[str, Any]:
         "mode": "web_only",
         "fallback_mode": "web_collection_only",
     }
+
+
+def stackline_channel_contexts(ideation: dict[str, Any]) -> dict[str, Any]:
+    """Return retailer-scoped Stackline contexts for this ideation."""
+    stackline = ideation.get("stackline_context") or {}
+    return stackline.get("channel_performance_estimation_contexts") or {}
+
+
+def primary_stackline_context(ideation: dict[str, Any]) -> dict[str, Any]:
+    """Return the primary Stackline context used for backward-compatible fields."""
+    stackline = ideation.get("stackline_context") or {}
+    return stackline.get("performance_estimation_context") or {}
+
+
+def stackline_context_for_channel(ideation: dict[str, Any], channel: str) -> dict[str, Any]:
+    """Return the most relevant Stackline context for one retailer channel."""
+    contexts = stackline_channel_contexts(ideation)
+    if channel in contexts:
+        return contexts[channel]
+    return primary_stackline_context(ideation)
 
 
 def normalize_text(value: Any) -> str | None:
@@ -398,8 +422,9 @@ def build_query_variants(ideation: dict[str, Any]) -> dict[str, list[str]]:
 def build_brand_watchlist(ideation: dict[str, Any]) -> list[dict[str, Any]]:
     """Merge workbook competitor hints with Stackline brand leaders."""
     research = ideation["research_guidance"]
-    stackline = ideation.get("stackline_context") or {}
-    performance = stackline.get("performance_estimation_context") or {}
+    performance_contexts = list(stackline_channel_contexts(ideation).values()) or [
+        primary_stackline_context(ideation)
+    ]
 
     watchlist: list[dict[str, Any]] = []
     seen = set()
@@ -422,8 +447,9 @@ def build_brand_watchlist(ideation: dict[str, Any]) -> list[dict[str, Any]]:
     for brand in research.get("known_competitors_list") or []:
         add_brand(brand, "workbook_known_competitor", "high")
 
-    for brand in performance.get("estimation_inputs", {}).get("top_brands", []):
-        add_brand(brand.get("brand"), "stackline_top_brand", "high")
+    for performance in performance_contexts:
+        for brand in performance.get("estimation_inputs", {}).get("top_brands", []):
+            add_brand(brand.get("brand"), "stackline_top_brand", "high")
 
     for brand in DEFAULT_DIRECT_COMPETITORS:
         add_brand(brand, "default_watchlist", "medium")
@@ -459,8 +485,7 @@ def build_brand_queries(
 
 def build_stackline_amazon_seeds(ideation: dict[str, Any]) -> list[dict[str, Any]]:
     """Return Stackline-backed Amazon competitor seeds, if available."""
-    stackline = ideation.get("stackline_context") or {}
-    performance = stackline.get("performance_estimation_context") or {}
+    performance = stackline_context_for_channel(ideation, "amazon")
     seeds = []
     for product in performance.get("estimation_inputs", {}).get(
         "top_competitor_products", []
@@ -475,6 +500,29 @@ def build_stackline_amazon_seeds(ideation: dict[str, Any]) -> list[dict[str, Any
                     "units_sold": product.get("units_sold"),
                     "sales_share_pct": product.get("sales_share_pct"),
                     "source": "stackline_summary_amazon",
+                }
+            )
+        )
+    return seeds
+
+
+def build_stackline_home_depot_seeds(ideation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return Stackline-backed Home Depot competitor seeds, if available."""
+    performance = stackline_context_for_channel(ideation, "home_depot")
+    seeds = []
+    for product in performance.get("estimation_inputs", {}).get(
+        "top_competitor_products", []
+    ):
+        seeds.append(
+            compact_dict(
+                {
+                    "brand": product.get("brand"),
+                    "model_number": product.get("model_number"),
+                    "title": product.get("title"),
+                    "avg_retail_price": product.get("avg_retail_price"),
+                    "units_sold": product.get("units_sold"),
+                    "sales_share_pct": product.get("sales_share_pct"),
+                    "source": "stackline_summary_home_depot",
                 }
             )
         )
@@ -600,10 +648,8 @@ def build_pricing_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
     """Summarize the pricing posture that Step 4 needs to validate."""
     business = ideation["business_targets"]
     reference = ideation.get("reference_context") or {}
-    performance = (
-        (ideation.get("stackline_context") or {})
-        .get("performance_estimation_context", {})
-    )
+    performance = primary_stackline_context(ideation)
+    channel_comparison = (ideation.get("stackline_context") or {}).get("channel_comparison", {})
     market_snapshot = performance.get("segment", {}).get("market_snapshot", {})
     estimation_inputs = performance.get("estimation_inputs", {})
     target_msrp = parse_currency(business.get("target_msrp"))
@@ -644,6 +690,7 @@ def build_pricing_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
             "target_vs_segment_avg_pct": target_vs_segment,
             "target_vs_reference_pct": target_vs_reference,
             "implied_gross_margin_pct": gross_margin,
+            "channel_comparison": channel_comparison,
             "price_band_for_collection": build_target_price_band(
                 target_msrp=target_msrp,
                 reference_price=reference_price,
@@ -655,10 +702,8 @@ def build_pricing_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
 
 def build_demand_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
     """Summarize the demand picture that Step 4 should validate."""
-    performance = (
-        (ideation.get("stackline_context") or {})
-        .get("performance_estimation_context", {})
-    )
+    performance = primary_stackline_context(ideation)
+    channel_comparison = (ideation.get("stackline_context") or {}).get("channel_comparison", {})
     market_snapshot = performance.get("segment", {}).get("market_snapshot", {})
     market_momentum = performance.get("segment", {}).get("market_momentum_pct", {})
     sunco_position = performance.get("sunco_position", {})
@@ -711,6 +756,7 @@ def build_demand_hypothesis(ideation: dict[str, Any]) -> dict[str, Any]:
                 "share_gap_vs_sunco_pct_points"
             ),
             "reference_family_present_in_stackline": reference_family.get("found"),
+            "channel_comparison": channel_comparison,
             "signals": signals,
         }
     )
@@ -734,6 +780,11 @@ def build_evidence_to_collect(ideation: dict[str, Any]) -> list[str]:
             0,
             "Use the matched Stackline segment as the primary Amazon/Home Depot market context, then use web research mainly to enrich missing specs and certifications.",
         )
+        if len(strategy.get("available_channels") or []) > 1:
+            evidence.insert(
+                1,
+                "Compare Amazon and Home Depot Stackline signals separately; do not collapse retailer-specific pricing, share, or assortment into one blended market view.",
+            )
     elif strategy.get("expected"):
         evidence.insert(
             0,
@@ -784,10 +835,7 @@ def build_evidence_to_collect(ideation: dict[str, Any]) -> list[str]:
 
 def build_research_priority(ideation: dict[str, Any]) -> str:
     """Assign a research priority for execution ordering."""
-    performance = (
-        (ideation.get("stackline_context") or {})
-        .get("performance_estimation_context", {})
-    )
+    performance = primary_stackline_context(ideation)
     signals = performance.get("opportunity_signals", [])
     strategy = stackline_strategy(ideation)
 
@@ -869,6 +917,13 @@ def build_research_prompt(
         )
         if demand.get("segment_retail_sales") is not None
         else None,
+        (
+            "Stackline channels available: "
+            + ", ".join(strategy.get("available_channels") or [])
+            + "."
+        )
+        if strategy.get("available_channels")
+        else None,
         f"Brand watchlist: {brands}." if brands else None,
         f"PM notes: {notes}." if notes else None,
         "Evidence to collect: " + " ".join(evidence[:4]) if evidence else None,
@@ -883,10 +938,6 @@ def build_channel_plan(ideation: dict[str, Any]) -> dict[str, Any]:
     brand_queries = build_brand_queries(ideation, brand_watchlist)
     queries = build_query_variants(ideation)
     pricing = build_pricing_hypothesis(ideation)
-    performance = (
-        (ideation.get("stackline_context") or {})
-        .get("performance_estimation_context", {})
-    )
     feature_watchlist = build_feature_watchlist(ideation)
     strategy = stackline_strategy(ideation)
 
@@ -912,13 +963,15 @@ def build_channel_plan(ideation: dict[str, Any]) -> dict[str, Any]:
             "primary_channel": "amazon" in priority_channels[:1],
             "queries": queries["amazon"],
             "competitor_seeds": build_stackline_amazon_seeds(ideation),
-            "segment_context": performance.get("segment", {}),
+            "segment_context": stackline_context_for_channel(ideation, "amazon").get("segment", {}),
             "stackline_primary": bool(strategy.get("matched")),
         },
         "brick_and_mortar": {
             "home_depot": {
                 "primary_channel": "home_depot" in priority_channels[:1],
                 "queries": queries["home_depot"],
+                "competitor_seeds": build_stackline_home_depot_seeds(ideation),
+                "segment_context": stackline_context_for_channel(ideation, "home_depot").get("segment", {}),
                 "stackline_primary": bool(strategy.get("matched")),
             },
             "walmart": {
@@ -952,7 +1005,7 @@ def build_packet_status(ideation: dict[str, Any]) -> str:
 def build_packet(ideation: dict[str, Any]) -> dict[str, Any]:
     """Build a single research packet for one ideation row."""
     stackline = ideation.get("stackline_context") or {}
-    performance = stackline.get("performance_estimation_context") or {}
+    performance = primary_stackline_context(ideation)
 
     return {
         "row_number": ideation["row_number"],
@@ -962,9 +1015,14 @@ def build_packet(ideation: dict[str, Any]) -> dict[str, Any]:
         "reference_baseline": build_reference_baseline(ideation),
         "market_context": compact_dict(
             {
+                "primary_channel": stackline.get("primary_channel"),
                 "segment_name": stackline.get("segment_name"),
                 "matched_bundle": stackline.get("matched_bundle"),
                 "performance_estimation_context": performance,
+                "channel_performance_estimation_contexts": stackline.get(
+                    "channel_performance_estimation_contexts"
+                ),
+                "channel_comparison": stackline.get("channel_comparison"),
             }
         ),
         "estimation_focus": {

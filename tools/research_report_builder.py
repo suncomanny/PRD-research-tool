@@ -326,6 +326,26 @@ def value_position_rows(pricing: dict[str, Any]) -> list[list[Any]]:
     return rows
 
 
+def channel_comparison_rows(performance: dict[str, Any]) -> list[list[Any]]:
+    """Format Stackline channel comparison rows for Section A."""
+    comparison = as_dict(performance.get("channel_comparison"))
+    channels = as_dict(comparison.get("channels"))
+    rows = []
+    for channel_name, channel in channels.items():
+        channel = as_dict(channel)
+        rows.append(
+            [
+                channel_name,
+                channel.get("retail_sales"),
+                channel.get("units_sold"),
+                channel.get("avg_retail_price"),
+                channel.get("retail_sales_growth_pct"),
+                channel.get("sunco_sales_share_pct"),
+            ]
+        )
+    return rows
+
+
 def spec_action_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
     """Format actionable feature/certification coverage rows."""
     rows = []
@@ -461,6 +481,13 @@ def render_row_sheet(
         row,
         "Performance Rationale",
         " | ".join(as_list(performance.get("rationale"))),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Stackline Channel Comparison",
+        ["Channel", "Retail Sales", "Units Sold", "Avg Price", "Sales Growth %", "Sunco Share %"],
+        channel_comparison_rows(performance),
     )
 
     row = write_table(
