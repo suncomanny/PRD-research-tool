@@ -1146,6 +1146,136 @@ def priority_rank(priority: str | None) -> int:
     return {"critical": 0, "high": 1, "medium": 2, "low": 3}.get((priority or "").lower(), 9)
 
 
+def optimization_signal_score(signal: str | None) -> float:
+    """Map optimization signals into a comparable 0-10 score."""
+    mapping = {
+        "table_stakes": 9.0,
+        "competitive": 7.0,
+        "leading": 9.0,
+        "mid_pack": 6.0,
+        "below_market": 3.0,
+        "whitespace": 4.0,
+        "value": 8.0,
+        "mainstream": 8.0,
+        "premium": 5.0,
+        "ultra_premium": 3.0,
+    }
+    return mapping.get((signal or "").lower(), 6.0)
+
+
+def optimization_label(score: float | None) -> str | None:
+    """Convert an optimization score into a plain-language label."""
+    if score is None:
+        return None
+    if score >= 8.5:
+        return "strong"
+    if score >= 7:
+        return "solid"
+    if score >= 5.5:
+        return "mixed"
+    return "caution"
+
+
+def build_optimization_scorecard(
+    pricing_analysis: dict[str, Any],
+    performance_estimation: dict[str, Any],
+    primary_drivers: list[dict[str, Any]],
+    low_signal_attributes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Score how well the ideation is configured for its category, separate from gate readiness."""
+    suggested = as_dict(pricing_analysis.get("suggested_msrp_range"))
+    target_position = as_dict(pricing_analysis.get("target_price_position"))
+    positioning = normalize_text(suggested.get("positioning"))
+    margin_conflict = bool(suggested.get("margin_conflict"))
+    minimum_margin_safe_price = parse_number(suggested.get("minimum_margin_safe_price"))
+    target_msrp = parse_number(pricing_analysis.get("target_msrp"))
+    launch_outlook = normalize_text(performance_estimation.get("launch_outlook"))
+    optimization_confidence = normalize_text(performance_estimation.get("confidence")) or "medium"
+
+    if margin_conflict:
+        price_score = 3.0
+        price_reason = "Current target pricing conflicts with the minimum margin-safe price."
+    elif positioning == "aligned":
+        price_score = 9.0
+        price_reason = "Target pricing sits inside the observed comparable band."
+    elif positioning == "aggressive":
+        price_score = 8.0
+        price_reason = "Target pricing is a value-leaning move that can work if margins hold."
+    elif positioning == "premium":
+        price_score = 5.0
+        price_reason = "Target pricing sits above the market band and needs stronger feature justification."
+    else:
+        price_score = optimization_signal_score(normalize_text(target_position.get("bucket")))
+        price_reason = "Price position is being inferred from the observed competitor percentile."
+
+    non_price_primary = [entry for entry in primary_drivers if normalize_text(entry.get("driver_type")) != "pricing"]
+    if non_price_primary:
+        primary_driver_score = round(
+            sum(optimization_signal_score(normalize_text(entry.get("signal"))) for entry in non_price_primary)
+            / len(non_price_primary),
+            2,
+        )
+        primary_reason = f"{len(non_price_primary)} primary category drivers are currently represented in the optimization lens."
+    else:
+        primary_driver_score = 5.0
+        primary_reason = "Primary category-specific drivers are still sparse, so this remains a placeholder fit score."
+
+    low_signal_count = len(low_signal_attributes)
+    if low_signal_count == 0:
+        risk_score = 9.0
+        risk_reason = "No major low-signal asks are being overweighted."
+    elif low_signal_count == 1:
+        risk_score = 7.0
+        risk_reason = "One low-signal attribute still needs validation before it should influence vendor scope."
+    elif low_signal_count == 2:
+        risk_score = 5.0
+        risk_reason = "Multiple low-signal asks could distract from the highest-impact changes."
+    else:
+        risk_score = 3.5
+        risk_reason = "Too many low-signal asks are still in scope relative to the core category drivers."
+
+    if margin_conflict:
+        margin_score = 2.0
+        margin_reason = "Margin conflict is still unresolved."
+    elif minimum_margin_safe_price is not None and target_msrp is not None and minimum_margin_safe_price <= target_msrp:
+        margin_score = 9.0
+        margin_reason = "Target MSRP clears the current minimum margin-safe threshold."
+    elif minimum_margin_safe_price is not None:
+        margin_score = 6.0
+        margin_reason = "Margin viability is partially known, but the target MSRP is still close to the safety floor."
+    else:
+        margin_score = 5.0
+        margin_reason = "Margin viability is still partially inferred."
+
+    if launch_outlook == "favorable":
+        market_score = 8.5
+        market_reason = "Current market context and spec posture support a favorable launch read."
+    elif launch_outlook == "mixed":
+        market_score = 6.5
+        market_reason = "Market context is usable but still mixed."
+    elif launch_outlook == "cautious":
+        market_score = 4.0
+        market_reason = "Current evidence suggests a cautious launch posture."
+    else:
+        market_score = 5.0
+        market_reason = "Market support is still provisional."
+
+    components = [
+        {"component": "Price Fit", "score": price_score, "weight": 0.25, "reason": price_reason},
+        {"component": "Primary Driver Fit", "score": primary_driver_score, "weight": 0.30, "reason": primary_reason},
+        {"component": "Margin Viability", "score": margin_score, "weight": 0.20, "reason": margin_reason},
+        {"component": "Market Support", "score": market_score, "weight": 0.15, "reason": market_reason},
+        {"component": "Low-Signal Risk", "score": risk_score, "weight": 0.10, "reason": risk_reason},
+    ]
+    weighted_total = round(sum(entry["score"] * entry["weight"] for entry in components), 2)
+    return {
+        "score": weighted_total,
+        "label": optimization_label(weighted_total),
+        "confidence": optimization_confidence,
+        "components": components,
+    }
+
+
 def build_ideation_optimization(
     packet: dict[str, Any],
     pricing_analysis: dict[str, Any],
@@ -1283,6 +1413,16 @@ def build_ideation_optimization(
         summary_parts.append(f"Treat {', '.join(low_signal_labels[:2])} as lower-signal until the market need is proven.")
 
     optimization_confidence = normalize_text(performance_estimation.get("confidence")) or "medium"
+    scorecard = build_optimization_scorecard(
+        pricing_analysis=pricing_analysis,
+        performance_estimation=performance_estimation,
+        primary_drivers=primary_drivers,
+        low_signal_attributes=low_signal_attributes,
+    )
+    if parse_number(scorecard.get("score")) is not None and normalize_text(scorecard.get("label")):
+        summary_parts.append(
+            f"Optimization score is {parse_number(scorecard.get('score')):.2f}/10 ({normalize_text(scorecard.get('label'))})."
+        )
     return compact_dict(
         {
             "profile_id": profile.get("id"),
@@ -1290,6 +1430,7 @@ def build_ideation_optimization(
             "decision_lens": profile.get("decision_lens"),
             "matched_keywords": profile.get("matched_keywords"),
             "optimization_confidence": optimization_confidence,
+            "optimization_scorecard": scorecard,
             "summary": " ".join(summary_parts),
             "primary_decision_drivers": primary_drivers,
             "secondary_decision_drivers": secondary_drivers,

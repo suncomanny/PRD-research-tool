@@ -477,6 +477,21 @@ def low_signal_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
     return rows
 
 
+def optimization_scorecard_rows(scorecard: dict[str, Any]) -> list[list[Any]]:
+    """Format optimization score components for the report."""
+    rows = []
+    for item in as_list(scorecard.get("components")):
+        rows.append(
+            [
+                item.get("component"),
+                item.get("score"),
+                item.get("weight"),
+                item.get("reason"),
+            ]
+        )
+    return rows
+
+
 def report_filename(row_number: int) -> str:
     """Return the stable report filename for a row."""
     return f"row_{row_number:03d}_research_report.xlsx"
@@ -539,6 +554,7 @@ def render_row_sheet(
     gate_readiness = as_dict(analysis.get("gate_readiness"))
     vendor_requests = as_list(analysis.get("highest_impact_vendor_requests"))
     ideation_optimization = as_dict(analysis.get("ideation_optimization"))
+    optimization_scorecard = as_dict(ideation_optimization.get("optimization_scorecard"))
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -676,6 +692,22 @@ def render_row_sheet(
         numeric_guidance_rows(spec_coverage),
     )
     row = merged_text_row(ws, row, "Category Optimization Summary", ideation_optimization.get("summary"))
+    row = key_value_rows(
+        ws,
+        row,
+        [
+            ("Optimization Score", optimization_scorecard.get("score")),
+            ("Optimization Label", optimization_scorecard.get("label")),
+            ("Optimization Confidence", optimization_scorecard.get("confidence")),
+        ],
+    )
+    row = write_table(
+        ws,
+        row,
+        "Optimization Scorecard",
+        ["Component", "Score", "Weight", "Reason"],
+        optimization_scorecard_rows(optimization_scorecard),
+    )
     row = write_table(
         ws,
         row,
