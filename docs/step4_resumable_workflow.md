@@ -146,6 +146,7 @@ Use `instructions/STEP4_PROMPT.md` as the one-task template for raw collection. 
 
 - Raw collection files must stay raw. No dedupe or recommendation logic belongs there.
 - When a packet says `collection_mode = stackline_first`, use Stackline seeds and market context as the primary Amazon/Home Depot anchor, and use web pages mainly to enrich missing attributes.
+- Stackline file discovery should prefer the standard `Stackline_[Segment]_[YYYY-MM]_[type].csv` naming convention, but valid CSVs must still be recoverable by schema, segment label, and retailer scope when filenames are inconsistent.
 - When a packet says `collection_mode = web_fallback`, Stackline was expected but missing; treat Amazon/Home Depot conclusions as provisional and collect directly from the web.
 - Price enrichment may append missing prices and extraction notes to raw files, but it must not delete or restructure valid raw competitor entries.
 - Normalized files are the first place where products become comparable across channels.

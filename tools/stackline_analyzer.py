@@ -32,6 +32,42 @@ STACKLINE_FILE_RE = re.compile(
     r"^Stackline_(?P<segment>.+)_(?P<period>\d{4}-\d{2})_(?P<kind>summary|traffic|sales)\.csv$",
     re.IGNORECASE,
 )
+SUMMARY_REQUIRED_COLUMNS = {
+    "Retail Sales",
+    "Units Sold",
+    "Retail Price",
+    "Segment Name",
+    "TimePeriod",
+}
+TWO_PERIOD_FIRST_COLUMNS = {"weekending", "week ending", "date"}
+RETAILER_ALIASES = {
+    "amazon.com": "amazon",
+    "amazon": "amazon",
+    "homedepot": "home_depot",
+    "home depot": "home_depot",
+    "walmart": "walmart",
+    "lowes": "lowes",
+    "lowe s": "lowes",
+    "lowe's": "lowes",
+}
+NOISE_TOKENS = {
+    "stackline",
+    "summary",
+    "sales",
+    "traffic",
+    "count",
+    "all",
+    "retailer",
+    "retailers",
+    "home",
+    "depot",
+    "homedepot",
+    "amazon",
+    "walmart",
+    "lowes",
+    "lowe",
+}
+DATE_TOKEN_RE = re.compile(r"^\d{4}(?:-\d{2})?$|^\d{6,8}$")
 
 
 @dataclass
@@ -42,6 +78,8 @@ class StacklineBundle:
     traffic_path: Path | None = None
     sales_path: Path | None = None
     segment_name: str | None = None
+    retailer_scope: str | None = None
+    discovery_method: str = "filename"
     match_score: float = 0.0
 
 
@@ -67,11 +105,154 @@ def text_tokens(value: str | None) -> set[str]:
     return {token for token in normalize_text(value).split() if token}
 
 
+def infer_retailer_scope(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if not normalized:
+        return None
+    for alias, scope in RETAILER_ALIASES.items():
+        if alias in normalized:
+            return scope
+    return None
+
+
+def infer_period_from_dates(values: pd.Series | list[Any]) -> str | None:
+    try:
+        parsed = pd.to_datetime(pd.Series(list(values)), errors="coerce")
+    except Exception:
+        return None
+    parsed = parsed.dropna()
+    if parsed.empty:
+        return None
+    latest = parsed.max()
+    return f"{latest.year:04d}-{latest.month:02d}"
+
+
+def infer_period_from_header_labels(labels: list[str]) -> str | None:
+    date_values: list[str] = []
+    for label in labels:
+        if not isinstance(label, str):
+            continue
+        label = label.strip()
+        if " - " in label:
+            tail = label.split(" - ")[-1].strip()
+            date_values.append(tail)
+        else:
+            date_values.append(label)
+    return infer_period_from_dates(pd.Series(date_values))
+
+
+def infer_period_from_filename(path: Path) -> str | None:
+    tokens = re.split(r"[_\-\s]+", path.stem)
+    candidates = [token for token in tokens if DATE_TOKEN_RE.match(token)]
+    if not candidates:
+        return None
+
+    for candidate in reversed(candidates):
+        if re.fullmatch(r"\d{4}-\d{2}", candidate):
+            return candidate
+        if re.fullmatch(r"\d{6}", candidate):
+            return f"{candidate[:4]}-{candidate[4:6]}"
+        if re.fullmatch(r"\d{8}", candidate):
+            return f"{candidate[:4]}-{candidate[4:6]}"
+    return None
+
+
+def infer_kind_from_filename(path: Path) -> str | None:
+    normalized = normalize_text(path.stem)
+    if not normalized:
+        return None
+    if "traffic" in normalized:
+        return "traffic"
+    if "sales" in normalized or "count" in normalized:
+        return "sales"
+    if "summary" in normalized:
+        return "summary"
+    return None
+
+
+def infer_segment_slug_from_filename(path: Path) -> str | None:
+    raw_tokens = re.split(r"[_\-\s]+", path.stem)
+    tokens = []
+    for token in raw_tokens:
+        token = token.strip()
+        if not token:
+            continue
+        normalized = normalize_text(token)
+        if not normalized:
+            continue
+        if normalized in NOISE_TOKENS:
+            continue
+        if DATE_TOKEN_RE.match(token):
+            continue
+        tokens.append(token)
+    if not tokens:
+        return None
+    return " ".join(tokens)
+
+
+def sniff_stackline_file(path: Path) -> dict[str, str] | None:
+    try:
+        header_frame = pd.read_csv(path, nrows=3)
+    except Exception:
+        return None
+
+    columns = [str(column).strip() for column in header_frame.columns]
+    column_set = set(columns)
+    inferred_kind = infer_kind_from_filename(path)
+    inferred_segment = infer_segment_slug_from_filename(path)
+    inferred_retailer = infer_retailer_scope(path.stem)
+    inferred_period = infer_period_from_filename(path)
+
+    if SUMMARY_REQUIRED_COLUMNS.issubset(column_set):
+        segment_name = None
+        if "Segment Name" in header_frame.columns:
+            segment_series = header_frame["Segment Name"].dropna()
+            if not segment_series.empty:
+                segment_name = str(segment_series.iloc[0]).strip()
+
+        retailer_scope = inferred_retailer
+        if "Retailer Name" in header_frame.columns:
+            retailer_series = header_frame["Retailer Name"].dropna()
+            if not retailer_series.empty:
+                retailer_scope = infer_retailer_scope(str(retailer_series.iloc[0]))
+
+        period = inferred_period
+        if "Week Ending" in header_frame.columns:
+            try:
+                week_series = pd.read_csv(path, usecols=["Week Ending"])["Week Ending"]
+            except Exception:
+                week_series = header_frame["Week Ending"]
+            period = infer_period_from_dates(week_series) or period
+
+        return {
+            "segment": segment_name or inferred_segment or path.stem,
+            "period": period or "unknown",
+            "kind": "summary",
+            "retailer_scope": retailer_scope or "",
+            "discovery_method": "content_sniff",
+        }
+
+    first_column = normalize_text(columns[0]) if columns else None
+    if len(columns) >= 3 and first_column in TWO_PERIOD_FIRST_COLUMNS:
+        return {
+            "segment": inferred_segment or path.stem,
+            "period": infer_period_from_header_labels(columns[1:3]) or inferred_period or "unknown",
+            "kind": inferred_kind or "sales",
+            "retailer_scope": inferred_retailer or "",
+            "discovery_method": "content_sniff",
+        }
+
+    return None
+
+
 def parse_stackline_file(path: Path) -> dict[str, str] | None:
     match = STACKLINE_FILE_RE.match(path.name)
-    if not match:
-        return None
-    return match.groupdict()
+    if match:
+        parsed = match.groupdict()
+        parsed["retailer_scope"] = infer_retailer_scope(path.stem) or ""
+        parsed["discovery_method"] = "filename"
+        return parsed
+    return sniff_stackline_file(path)
 
 
 def extract_segment_name(summary_path: Path) -> str | None:
@@ -83,6 +264,16 @@ def extract_segment_name(summary_path: Path) -> str | None:
     if series.empty:
         return None
     return str(series.iloc[0]).strip()
+
+
+def extract_retailer_scope(summary_path: Path) -> str | None:
+    try:
+        series = pd.read_csv(summary_path, usecols=["Retailer Name"])["Retailer Name"].dropna()
+    except Exception:
+        return None
+    if series.empty:
+        return None
+    return infer_retailer_scope(str(series.iloc[0]))
 
 
 def segment_match_score(subcategory: str, segment_slug: str, segment_name: str | None) -> float:
@@ -120,7 +311,7 @@ def segment_match_score(subcategory: str, segment_slug: str, segment_name: str |
 
 def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
     """Find the newest matching Stackline bundle for a subcategory."""
-    bundles: dict[tuple[str, str], StacklineBundle] = {}
+    bundles: dict[tuple[str, str, str], StacklineBundle] = {}
 
     for path in folder.iterdir():
         if not path.is_file():
@@ -130,10 +321,15 @@ def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
         if not parsed:
             continue
 
-        key = (parsed["segment"], parsed["period"])
+        key = (parsed["segment"], parsed["period"], parsed.get("retailer_scope") or "")
         bundle = bundles.setdefault(
             key,
-            StacklineBundle(segment_slug=parsed["segment"], period=parsed["period"]),
+            StacklineBundle(
+                segment_slug=parsed["segment"],
+                period=parsed["period"],
+                retailer_scope=parsed.get("retailer_scope") or None,
+                discovery_method=parsed.get("discovery_method") or "filename",
+            ),
         )
         kind = parsed["kind"].lower()
         if kind == "summary":
@@ -149,6 +345,9 @@ def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
     for bundle in bundles.values():
         if bundle.summary_path:
             bundle.segment_name = extract_segment_name(bundle.summary_path)
+            bundle.retailer_scope = bundle.retailer_scope or extract_retailer_scope(
+                bundle.summary_path
+            )
         bundle.match_score = segment_match_score(
             subcategory,
             bundle.segment_slug,
@@ -157,7 +356,13 @@ def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
 
     ranked = sorted(
         bundles.values(),
-        key=lambda bundle: (bundle.match_score, bundle.period, bool(bundle.summary_path)),
+        key=lambda bundle: (
+            bool(bundle.summary_path),
+            bundle.match_score,
+            bool(bundle.traffic_path),
+            bool(bundle.sales_path),
+            bundle.period,
+        ),
         reverse=True,
     )
     best = ranked[0]
@@ -165,6 +370,37 @@ def discover_bundle(folder: Path, subcategory: str) -> StacklineBundle:
         raise FileNotFoundError(
             f"No Stackline bundle could be matched to subcategory '{subcategory}'."
         )
+
+    compatible = [
+        bundle
+        for bundle in bundles.values()
+        if bundle is not best
+        and bundle.period == best.period
+        and (bundle.retailer_scope or "") == (best.retailer_scope or "")
+        and bundle.match_score > 0
+    ]
+    if not best.traffic_path:
+        traffic_donor = next(
+            (
+                bundle
+                for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
+                if bundle.traffic_path
+            ),
+            None,
+        )
+        if traffic_donor:
+            best.traffic_path = traffic_donor.traffic_path
+    if not best.sales_path:
+        sales_donor = next(
+            (
+                bundle
+                for bundle in sorted(compatible, key=lambda bundle: bundle.match_score, reverse=True)
+                if bundle.sales_path
+            ),
+            None,
+        )
+        if sales_donor:
+            best.sales_path = sales_donor.sales_path
     return best
 
 
@@ -437,10 +673,16 @@ def analyze_stackline(
     summary_df = load_summary(summary_path)
     period_metrics = build_period_metrics(summary_df)
     main_df = summary_df[summary_df["TimePeriod"] == "Main"]
+    retailer_scope = None
+    if "Retailer Name" in summary_df.columns:
+        retailer_series = summary_df["Retailer Name"].dropna()
+        if not retailer_series.empty:
+            retailer_scope = infer_retailer_scope(str(retailer_series.iloc[0]))
 
     result: dict[str, Any] = {
         "subcategory": subcategory,
         "segment_name": str(summary_df["Segment Name"].dropna().iloc[0]),
+        "retailer_scope": retailer_scope,
         "matched_bundle": None,
         "files": {
             "summary": str(summary_path),
@@ -476,6 +718,8 @@ def analyze_stackline(
         result["matched_bundle"] = {
             "segment_slug": match_bundle.segment_slug,
             "period": match_bundle.period,
+            "retailer_scope": match_bundle.retailer_scope,
+            "discovery_method": match_bundle.discovery_method,
             "match_score": clean_number(match_bundle.match_score, 4),
         }
 
@@ -502,6 +746,10 @@ def analyze_stackline(
     else:
         result["warnings"].append(
             "No traffic CSV provided. Traffic and conversion metrics are omitted."
+        )
+    if retailer_scope:
+        result["warnings"].append(
+            f"Stackline context is scoped to {retailer_scope.replace('_', ' ')} rather than an all-retailer market view."
         )
 
     if sales_path:
@@ -594,6 +842,7 @@ def build_performance_estimation_context(stackline_result: dict[str, Any]) -> di
     return {
         "segment": {
             "name": stackline_result.get("segment_name"),
+            "retailer_scope": stackline_result.get("retailer_scope"),
             "matched_bundle": stackline_result.get("matched_bundle"),
             "market_snapshot": {
                 "retail_sales": main.get("retail_sales"),

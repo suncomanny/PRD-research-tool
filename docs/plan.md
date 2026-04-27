@@ -30,7 +30,7 @@ planStatus:
 | **Runtime** | Node.js (matching PRD Generator pattern: `xlsx` + `docx` npm packages + SharePoint Graph API) |
 | **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context and falls back to web collection if a matching segment file is missing |
 | **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\` |
-| **Stackline naming convention** | `Stackline_[StacklineSegment]_[YYYY-MM]_[type].csv` (type = summary, traffic, or sales) |
+| **Stackline naming convention** | Preferred: `Stackline_[StacklineSegment]_[YYYY-MM]_[type].csv` (type = summary, traffic, or sales). Fallback: valid Stackline CSVs can still be discovered by schema, segment label, and retailer scope when teammates upload inconsistent filenames. |
 
 ---
 
@@ -266,11 +266,12 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - A shared `STEP4_PROMPT.md` template defines the `1 row x 1 channel` raw-collection workflow
 - [ ] **Stackline integration:** Treat Stackline as the default Amazon / Home Depot market-intelligence layer unless a row explicitly opts out:
   - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\`
-  - Match files by Stackline segment label / alias: `Stackline_[StacklineSegment]_*.csv`
-  - Pick newest by YYYY-MM date in filename
+  - Match files by Stackline segment label / alias: prefer `Stackline_[StacklineSegment]_*.csv`, but fall back to CSV schema sniffing when filenames are inconsistent
+  - Pick newest by inferred YYYY-MM period; use filename when available, otherwise infer the period from export dates inside the CSV
   - Parse `_summary` CSV as the primary source for product-level revenue, units, price, brand share, and competitor ranking
   - Parse `_traffic` CSV as the supplemental source for total traffic and derived conversion rate
   - Treat `_sales` CSV as secondary / optional until its schema is confirmed across multiple segments
+  - Preserve retailer scope (`amazon`, `home_depot`, etc.) so retailer-specific Stackline bundles are not treated like an all-retailer market view
   - Merge into the ideation performance-estimation context, not just the raw competitor dump
   - If no matching Stackline bundle is found, mark the row as `web_fallback` and continue with web collection instead of failing
 - [ ] Git checkpoint: "Step 4 - Research engine working"
