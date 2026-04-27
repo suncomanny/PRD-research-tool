@@ -221,6 +221,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - A batch helper now generates one Postgres MCP query bundle plus a merge-ready payload template for all unique reference SKUs in a workbook/session, so true DB enrichment can be applied in one rerun instead of by hand per row.
 - The batch Postgres query helper now ranks exact SKU hits first and then falls back to family-level title/listing candidates so reference baselines are less likely to stay blank when only the SKU family exists in Postgres.
 - When Postgres returns a listing price that materially diverges from the fallback metadata listing price, the tool now keeps the fallback value and records the rejected Postgres candidate as a note for QA instead of silently overriding the report baseline.
+- A reference-baseline audit pass now classifies each unique reference SKU as `fully_trusted`, `trusted_with_fallback`, or `unresolved_manual_followup` and writes both JSON and Markdown QA artifacts into the session root.
 
 **What we pull (and why):**
 | Data | Source | Why |
