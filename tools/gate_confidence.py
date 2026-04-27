@@ -247,6 +247,71 @@ def score_stackline_total_traffic(packet: dict[str, Any], channel: str) -> dict[
     }
 
 
+def score_competitor_growth_proxy(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    context = lookup_channel_context(packet, channel)
+    segment = as_dict(context.get("segment"))
+    snapshot = as_dict(segment.get("market_snapshot"))
+    momentum = as_dict(segment.get("market_momentum_pct"))
+
+    brand_count = parse_number(snapshot.get("brand_count"))
+    product_count = parse_number(snapshot.get("catalog_product_count"))
+    sales_growth = parse_number(momentum.get("retail_sales"))
+    units_growth = parse_number(momentum.get("units_sold"))
+    traffic_growth = parse_number(momentum.get("traffic"))
+
+    if brand_count is None and product_count is None and sales_growth is None and units_growth is None and traffic_growth is None:
+        return {"status": "inactive_missing_source", "reason": "No assortment or momentum snapshot is available to proxy competitor growth pressure."}
+
+    pressure = 0
+    if brand_count is not None:
+        if brand_count >= 200:
+            pressure += 3
+        elif brand_count >= 100:
+            pressure += 2
+        elif brand_count >= 40:
+            pressure += 1
+
+    if product_count is not None:
+        if product_count >= 1000:
+            pressure += 3
+        elif product_count >= 500:
+            pressure += 2
+        elif product_count >= 200:
+            pressure += 1
+
+    strongest_growth = max(
+        value for value in (sales_growth, units_growth, traffic_growth)
+        if value is not None
+    ) if any(value is not None for value in (sales_growth, units_growth, traffic_growth)) else None
+
+    if strongest_growth is not None:
+        if strongest_growth >= 25:
+            pressure += 2
+        elif strongest_growth >= 10:
+            pressure += 1
+
+    if pressure <= 1:
+        score = 8
+    elif pressure <= 3:
+        score = 6
+    elif pressure <= 5:
+        score = 4
+    else:
+        score = 2
+
+    evidence_type = "direct" if channel == "amazon" else "proxy"
+    return {
+        "status": "scored",
+        "score": float(score),
+        "evidence_type": evidence_type,
+        "evidence": (
+            f"Growth-pressure proxy uses brand count {round_metric(brand_count)}, "
+            f"catalog products {round_metric(product_count)}, and strongest momentum "
+            f"{round_metric(strongest_growth)}%."
+        ),
+    }
+
+
 def score_segment_persistence(packet: dict[str, Any]) -> dict[str, Any]:
     market_context = as_dict(as_dict(packet.get("market_context")).get("performance_estimation_context"))
     segment = as_dict(market_context.get("segment"))
@@ -365,6 +430,7 @@ STRATEGIES = {
     "stackline_brand_count": score_stackline_brand_count,
     "target_price_position": score_target_price_position,
     "stackline_total_traffic": score_stackline_total_traffic,
+    "competitor_growth_proxy": score_competitor_growth_proxy,
     "segment_persistence_proxy": score_segment_persistence,
     "target_market_fit_proxy": score_target_market_fit,
     "target_vendor_cost_proxy": score_target_vendor_cost_proxy,
@@ -404,7 +470,7 @@ def evaluate_question(
         }
 
     strategy = STRATEGIES[strategy_name]
-    if strategy_name in {"reference_channel_revenue", "stackline_brand_count", "stackline_total_traffic"}:
+    if strategy_name in {"reference_channel_revenue", "stackline_brand_count", "stackline_total_traffic", "competitor_growth_proxy"}:
         result = strategy(packet, channel)
     elif strategy_name in {"target_price_position"}:
         result = strategy(pricing_analysis)

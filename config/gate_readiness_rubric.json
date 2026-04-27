@@ -368,22 +368,22 @@
         "new"
       ],
       "controllability": "market_context",
-      "current_support": "planned",
+      "current_support": "partial",
       "scoring_logic_summary": "Rate of new brand and SKU entry into the segment.",
       "scoring_tiers_summary": "Stable=8, 2-3 new=6, 4-6=4, 7+=2",
-      "important_caveats": "Amazon direct and Sunco proxy are both still unimplemented in the first pass.",
+      "important_caveats": "Current first-pass implementation uses assortment and momentum pressure as a proxy until true 13-week entrant counts are available.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "competitor_growth_proxy"
         },
         "sunco_com": {
           "earliest_gate": "G2",
           "latest_gate": "G5",
           "source_type": "proxy",
-          "strategy": null
+          "strategy": "competitor_growth_proxy"
         }
       }
     },
