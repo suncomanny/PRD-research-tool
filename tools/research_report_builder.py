@@ -473,6 +473,7 @@ def render_row_sheet(
             ("Reference Title Source", reference.get("title_source")),
             ("Reference Listing Price", reference.get("listing_price")),
             ("Listing Price Source", reference.get("listing_price_source")),
+            ("Listing Price Note", reference.get("listing_price_note")),
             ("Shopify Revenue 12mo", reference.get("shopify_revenue_12mo")),
             ("Shopify Units 12mo", reference.get("shopify_units_12mo")),
             ("Shopify Data Source", reference.get("shopify_data_source")),

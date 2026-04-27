@@ -38,6 +38,8 @@ METADATA_FILE = "SUNCO ALL METADATA.csv"
 SHOPIFY_SALES_FILE = "SUNCO 2025 ALL SALES Shopify - Categorized.csv"
 AMAZON_SALES_FILE = "FULL SUNCO 2025 SALES Amazon.csv"
 LOCAL_SALES_PERIOD_LABEL = "FY2025 local export fallback"
+MIN_POSTGRES_PRICE_RATIO = 0.5
+MAX_POSTGRES_PRICE_RATIO = 2.5
 
 
 def strip_pack_suffix(sku: str) -> str:
@@ -101,6 +103,29 @@ def title_is_usable(title: str | None) -> bool:
     if len(cleaned) < 4:
         return False
     return bool(re.search(r"[A-Za-z]", cleaned))
+
+
+def should_accept_postgres_listing_price(
+    current_price: float | None,
+    postgres_price: float | None,
+) -> tuple[bool, str | None]:
+    """Decide whether a Postgres listing price is sane enough to override the fallback."""
+    if postgres_price is None:
+        return False, None
+    if current_price is None or current_price <= 0:
+        return True, None
+
+    ratio = postgres_price / current_price
+    if MIN_POSTGRES_PRICE_RATIO <= ratio <= MAX_POSTGRES_PRICE_RATIO:
+        return True, None
+
+    return (
+        False,
+        "Ignored Postgres listing price "
+        f"{postgres_price:.2f} because it diverged from the fallback listing price "
+        f"{current_price:.2f} by more than the allowed ratio range "
+        f"({MIN_POSTGRES_PRICE_RATIO:.2f}x-{MAX_POSTGRES_PRICE_RATIO:.2f}x).",
+    )
 
 
 @lru_cache(maxsize=1)
@@ -339,8 +364,17 @@ def merge_postgres_data(csv_result: dict, postgres_data: dict) -> dict:
 
     # Listing price
     if postgres_data.get('listing_price') is not None:
-        result['listing_price'] = postgres_data.get('listing_price')
-        result['listing_price_source'] = 'postgres_mcp'
+        postgres_price = parse_currency_value(postgres_data.get('listing_price'))
+        current_price = parse_currency_value(result.get('listing_price'))
+        accepted, note = should_accept_postgres_listing_price(current_price, postgres_price)
+        if accepted:
+            result['listing_price'] = postgres_price
+            result['listing_price_source'] = 'postgres_mcp'
+            if note:
+                result['listing_price_note'] = note
+        elif note:
+            result['listing_price_note'] = note
+            result['listing_price_candidate_postgres'] = postgres_price
 
     # Sales split by channel — ALWAYS separate
     if postgres_data.get('shopify_revenue') is not None:

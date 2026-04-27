@@ -544,6 +544,8 @@ def build_reference_baseline(ideation: dict[str, Any]) -> dict[str, Any] | None:
             "image_url": reference.get("image_url"),
             "listing_price": reference.get("listing_price"),
             "listing_price_source": reference.get("listing_price_source"),
+            "listing_price_note": reference.get("listing_price_note"),
+            "listing_price_candidate_postgres": reference.get("listing_price_candidate_postgres"),
             "shopify_revenue_12mo": reference.get("shopify_revenue_12mo"),
             "shopify_units_12mo": reference.get("shopify_units_12mo"),
             "shopify_data_source": reference.get("shopify_data_source"),
