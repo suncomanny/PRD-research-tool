@@ -140,6 +140,8 @@ Generate one batch of Postgres MCP reference-baseline queries plus a merge-ready
 cmd /c C:\Windows\py.exe tools\reference_postgres_batch.py "C:\path\to\output\research_sessions\<session_name>"
 ```
 
+The generated title and listing-price queries are ranked exact-SKU first, then family-level fallbacks, so a single rerun can recover more reference baselines when the precise SKU string is not present in Postgres.
+
 Then execute the generated queries in a Postgres-capable environment, fill `reference_postgres_payload_template.json`, and rerun session init with `--postgres-json` to upgrade the fallback baseline values:
 
 ```powershell

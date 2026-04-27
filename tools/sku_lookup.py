@@ -367,18 +367,44 @@ def merge_postgres_data(csv_result: dict, postgres_data: dict) -> dict:
 # ── MCP Query Templates (for Claude to execute via Postgres MCP) ─────────
 MCP_QUERIES = {
     "title": """
-        SELECT sp.title
+        SELECT
+            sv.sku,
+            sp.title,
+            CASE
+{sku_match_case_variant}
+                ELSE 9
+            END AS sku_match_rank
         FROM shopify_productvariantatshopify sv
         JOIN shopify_shopifyproduct sp ON sp.id = sv.shopify_product_id
-        WHERE sv.sku = '{sku}'
-        LIMIT 1
+        WHERE {sku_match_where_variant}
+        ORDER BY sku_match_rank, LENGTH(sv.sku)
+        LIMIT 10
     """,
     "listing_price": """
-        SELECT pl.list_price, sl.listing_sku, sl.sales_channel_id
+        SELECT
+            pl.list_price,
+            sl.listing_sku,
+            sl.sales_channel_id,
+            CASE
+{sku_match_case_listing}
+                ELSE 9
+            END AS sku_match_rank
         FROM pricing_listingprice pl
         JOIN skubana_listing sl ON sl.id = pl.listing_sku_id
-        WHERE sl.listing_sku = '{sku}'
+        WHERE (
+            {sku_match_where_listing}
+        )
         AND sl.sales_channel_id IN (12585, 11929)
+        ORDER BY
+            sku_match_rank,
+            CASE
+                WHEN sl.sales_channel_id = 12585 THEN 0
+                WHEN sl.sales_channel_id = 11929 THEN 1
+                ELSE 2
+            END,
+            LENGTH(sl.listing_sku),
+            pl.list_price DESC NULLS LAST
+        LIMIT 20
     """,
     "sales_12mo": """
         SELECT
@@ -406,6 +432,28 @@ def default_sales_window(anchor_date: date | None = None) -> tuple[str, str]:
     return start_date.isoformat(), end_date.isoformat()
 
 
+def build_ranked_sku_match_sql(field_name: str, sku: str, family: str) -> tuple[str, str]:
+    """Build deduplicated WHERE and CASE fragments for exact/family SKU fallback."""
+    conditions: list[tuple[int, str]] = [(0, f"{field_name} = '{sku}'")]
+    if family and family != sku:
+        conditions.append((1, f"{field_name} = '{family}'"))
+    if family:
+        conditions.append((2, f"{field_name} LIKE '{family}-%'"))
+        conditions.append((3, f"{field_name} LIKE '{family}%'"))
+
+    deduped: list[tuple[int, str]] = []
+    seen = set()
+    for rank, condition in conditions:
+        if condition in seen:
+            continue
+        seen.add(condition)
+        deduped.append((rank, condition))
+
+    where_sql = "\n            OR ".join(condition for _, condition in deduped)
+    case_sql = "\n".join(f"                WHEN {condition} THEN {rank}" for rank, condition in deduped)
+    return where_sql, case_sql
+
+
 def build_mcp_queries(
     sku: str,
     start_date: str | None = None,
@@ -419,6 +467,9 @@ def build_mcp_queries(
         else default_sales_window()
     )
 
+    variant_where, variant_case = build_ranked_sku_match_sql("sv.sku", sku, family)
+    listing_where, listing_case = build_ranked_sku_match_sql("sl.listing_sku", sku, family)
+
     queries = {}
     for name, query in MCP_QUERIES.items():
         queries[name] = query.format(
@@ -426,6 +477,10 @@ def build_mcp_queries(
             family=family,
             start_date=resolved_start,
             end_date=resolved_end,
+            sku_match_where_variant=variant_where,
+            sku_match_case_variant=variant_case,
+            sku_match_where_listing=listing_where,
+            sku_match_case_listing=listing_case,
         ).strip()
     return queries
 

@@ -219,6 +219,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 
 **Fallback behavior:** Postgres MCP remains the preferred source for current listing price and last-12-month channel sales, but the tool can now fall back to local metadata + Shopify/Amazon sales exports when MCP payloads are unavailable. Fallback values must stay clearly labeled in the report.
 - A batch helper now generates one Postgres MCP query bundle plus a merge-ready payload template for all unique reference SKUs in a workbook/session, so true DB enrichment can be applied in one rerun instead of by hand per row.
+- The batch Postgres query helper now ranks exact SKU hits first and then falls back to family-level title/listing candidates so reference baselines are less likely to stay blank when only the SKU family exists in Postgres.
 
 **What we pull (and why):**
 | Data | Source | Why |
