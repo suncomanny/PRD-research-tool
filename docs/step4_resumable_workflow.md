@@ -134,6 +134,18 @@ Build a combined workbook with a summary sheet plus one sheet per completed idea
 cmd /c C:\Windows\py.exe tools\research_report_builder.py "C:\path\to\output\research_sessions\<session_name>" --combined
 ```
 
+Generate one batch of Postgres MCP reference-baseline queries plus a merge-ready payload template for the whole workbook/session:
+
+```powershell
+cmd /c C:\Windows\py.exe tools\reference_postgres_batch.py "C:\path\to\output\research_sessions\<session_name>"
+```
+
+Then execute the generated queries in a Postgres-capable environment, fill `reference_postgres_payload_template.json`, and rerun session init with `--postgres-json` to upgrade the fallback baseline values:
+
+```powershell
+cmd /c C:\Windows\py.exe tools\research_session_manager.py init "C:\path\to\PRD_Research_Template.xlsx" --session-name <session_name> --output-root "C:\path\to\output\research_sessions" --postgres-json "C:\path\to\reference_postgres_payload_template.json"
+```
+
 Use `instructions/STEP4_PROMPT.md` as the one-task template for raw collection. `instructions/COLLECTOR_NEXT.md` is the generic handoff file when Claude is unstable or Codex is taking over. The unit of work is always `1 row x 1 channel`.
 
 ## Status Contract
