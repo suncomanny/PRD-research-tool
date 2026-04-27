@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 RUBRIC_PATH = Path(__file__).resolve().parents[1] / "config" / "gate_readiness_rubric.json"
 GATE_ORDER = {"G1": 1, "G2": 2, "G3": 3, "G4": 4, "G5": 5}
 CHANNELS = ["amazon", "sunco_com"]
+CHANNEL_TO_SOURCE_ID = {"amazon": 11929, "sunco_com": 12585}
 
 
 def load_rubric() -> dict[str, Any]:
@@ -36,6 +38,23 @@ def normalize_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def parse_month_value(value: Any) -> datetime | None:
+    """Parse a month-like value into a comparable datetime."""
+    text = normalize_text(value)
+    if not text:
+        return None
+    text = text.replace("Z", "+00:00")
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def parse_number(value: Any) -> float | None:
@@ -121,6 +140,41 @@ def lookup_channel_context(packet: dict[str, Any], channel: str) -> dict[str, An
     return as_dict(channel_contexts.get(channel))
 
 
+def reference_channel_metrics(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    """Return channel-specific reference metrics block."""
+    reference = as_dict(packet.get("reference_baseline"))
+    concentration = as_dict(reference.get("customer_concentration"))
+    if channel == "amazon":
+        return as_dict(concentration.get("amazon"))
+    return as_dict(concentration.get("shopify"))
+
+
+def reference_monthly_sales_rows(packet: dict[str, Any], channel: str) -> list[dict[str, Any]]:
+    """Return sorted monthly sales rows for a channel from the reference baseline."""
+    reference = as_dict(packet.get("reference_baseline"))
+    wanted_id = CHANNEL_TO_SOURCE_ID[channel]
+    rows = []
+    for item in as_list(reference.get("monthly_sales")):
+        if not isinstance(item, dict):
+            continue
+        channel_id = parse_number(item.get("sales_channel_id"))
+        if channel_id != wanted_id:
+            continue
+        month_value = parse_month_value(item.get("month"))
+        if month_value is None:
+            continue
+        rows.append(
+            {
+                "month": month_value,
+                "revenue": parse_number(item.get("revenue")) or 0.0,
+                "units": parse_number(item.get("units")) or 0.0,
+                "distinct_customers": parse_number(item.get("distinct_customers")),
+            }
+        )
+    rows.sort(key=lambda entry: entry["month"])
+    return rows
+
+
 def score_by_thresholds(value: float | None, thresholds: list[tuple[float, float]]) -> float | None:
     if value is None:
         return None
@@ -156,6 +210,116 @@ def score_reference_channel_revenue(packet: dict[str, Any], channel: str) -> dic
         "score": score,
         "evidence_type": evidence_type,
         "evidence": f"Reference {channel} revenue baseline = ${revenue:,.2f}.",
+    }
+
+
+def score_demand_consistency(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    rows = reference_monthly_sales_rows(packet, channel)
+    if not rows:
+        return {"status": "inactive_missing_source", "reason": "No monthly sales history is available for demand consistency."}
+
+    trailing = rows[-12:]
+    active_months = sum(1 for row in trailing if (row["revenue"] > 0 or row["units"] > 0))
+    if active_months >= 11:
+        score = 10
+    elif active_months >= 9:
+        score = 8
+    elif active_months >= 7:
+        score = 6
+    elif active_months >= 5:
+        score = 4
+    else:
+        score = 2
+
+    return {
+        "status": "scored",
+        "score": float(score),
+        "evidence_type": "direct",
+        "evidence": f"{active_months} active months with orders in the trailing {len(trailing)} months.",
+    }
+
+
+def score_bulk_buyer_analysis(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    metrics = reference_channel_metrics(packet, channel)
+    total_customers = parse_number(metrics.get("total_customers"))
+    top_share = parse_number(metrics.get("top_20pct_revenue_share_pct"))
+    repeat_rate = parse_number(metrics.get("repeat_rate_pct"))
+    if total_customers is None or top_share is None:
+        return {"status": "inactive_missing_source", "reason": "No customer concentration metrics are available for bulk buyer analysis."}
+
+    if channel == "amazon":
+        if top_share < 40:
+            score = 10
+        elif top_share < 55:
+            score = 8
+        elif top_share < 70:
+            score = 6
+        elif top_share < 85:
+            score = 4
+        else:
+            score = 2
+    else:
+        if total_customers < 10:
+            score = 5
+        elif top_share > 70:
+            score = 10
+        elif top_share >= 55:
+            score = 8
+        elif top_share >= 40:
+            score = 6
+        else:
+            score = 4
+
+    if repeat_rate is not None and repeat_rate > 15:
+        score += 1
+
+    return {
+        "status": "scored",
+        "score": float(clamp_score(score)),
+        "evidence_type": "direct",
+        "evidence": f"Top-20pct revenue share is {round_metric(top_share)}% across {round_metric(total_customers)} customers; repeat rate is {round_metric(repeat_rate)}%.",
+    }
+
+
+def score_sales_trend(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    rows = reference_monthly_sales_rows(packet, channel)
+    if not rows:
+        return {"status": "inactive_missing_source", "reason": "No monthly sales history is available for sales trend."}
+
+    by_month = {row["month"].strftime("%Y-%m"): row["revenue"] for row in rows}
+    yoy_deltas: list[float] = []
+    recent_months = rows[-12:]
+    for row in recent_months:
+        current_month = row["month"]
+        prior_key = current_month.replace(year=current_month.year - 1).strftime("%Y-%m")
+        prior_revenue = by_month.get(prior_key)
+        if prior_revenue in (None, 0):
+            continue
+        yoy_deltas.append(((row["revenue"] - prior_revenue) / prior_revenue) * 100)
+
+    if not yoy_deltas:
+        return {"status": "inactive_missing_source", "reason": "Monthly history does not contain enough prior-year pairs for sales trend."}
+
+    yoy_avg = sum(yoy_deltas) / len(yoy_deltas)
+    if yoy_avg > 20:
+        score = 9
+    elif yoy_avg > 10:
+        score = 7
+    elif yoy_avg >= 0:
+        score = 5
+    elif yoy_avg >= -10:
+        score = 3
+    else:
+        score = 1
+
+    if len(yoy_deltas) < 12:
+        score = min(score, 8)
+
+    return {
+        "status": "scored",
+        "score": float(score),
+        "evidence_type": "direct",
+        "evidence": f"Average YoY monthly revenue trend is {round_metric(yoy_avg)}% across {len(yoy_deltas)} month-pairs.",
     }
 
 
@@ -244,6 +408,33 @@ def score_stackline_total_traffic(packet: dict[str, Any], channel: str) -> dict[
         "score": score,
         "evidence_type": "direct",
         "evidence": f"Segment traffic snapshot = {traffic:,.0f}.",
+    }
+
+
+def score_gmc_visibility_proxy(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+    context = lookup_channel_context(packet, channel)
+    traffic = parse_number(as_dict(as_dict(context.get("segment")).get("market_snapshot")).get("total_traffic"))
+    if traffic is None:
+        return {"status": "inactive_missing_source", "reason": "No Stackline traffic snapshot is available for the GMC visibility proxy."}
+
+    if traffic >= 750000:
+        score = 9
+    elif traffic >= 500000:
+        score = 8
+    elif traffic >= 250000:
+        score = 7
+    elif traffic >= 100000:
+        score = 5
+    elif traffic >= 50000:
+        score = 3
+    else:
+        score = 2
+
+    return {
+        "status": "scored",
+        "score": float(score),
+        "evidence_type": "proxy",
+        "evidence": f"Stackline segment traffic proxy = {traffic:,.0f}; proxy score capped below 10 by methodology.",
     }
 
 
@@ -427,11 +618,15 @@ def score_margin_viability(pricing_analysis: dict[str, Any], channel: str) -> di
 
 STRATEGIES = {
     "reference_channel_revenue": score_reference_channel_revenue,
+    "demand_consistency": score_demand_consistency,
+    "bulk_buyer_analysis": score_bulk_buyer_analysis,
+    "sales_trend": score_sales_trend,
     "stackline_brand_count": score_stackline_brand_count,
     "target_price_position": score_target_price_position,
     "stackline_total_traffic": score_stackline_total_traffic,
     "competitor_growth_proxy": score_competitor_growth_proxy,
     "segment_persistence_proxy": score_segment_persistence,
+    "gmc_visibility_proxy": score_gmc_visibility_proxy,
     "target_market_fit_proxy": score_target_market_fit,
     "target_vendor_cost_proxy": score_target_vendor_cost_proxy,
     "margin_viability": score_margin_viability,
@@ -470,7 +665,16 @@ def evaluate_question(
         }
 
     strategy = STRATEGIES[strategy_name]
-    if strategy_name in {"reference_channel_revenue", "stackline_brand_count", "stackline_total_traffic", "competitor_growth_proxy"}:
+    if strategy_name in {
+        "reference_channel_revenue",
+        "demand_consistency",
+        "bulk_buyer_analysis",
+        "sales_trend",
+        "stackline_brand_count",
+        "stackline_total_traffic",
+        "competitor_growth_proxy",
+        "gmc_visibility_proxy",
+    }:
         result = strategy(packet, channel)
     elif strategy_name in {"target_price_position"}:
         result = strategy(pricing_analysis)

@@ -132,7 +132,7 @@
         "known"
       ],
       "controllability": "market_context",
-      "current_support": "planned",
+      "current_support": "implemented",
       "scoring_logic_summary": "Distinct months with sales over the trailing 12 months.",
       "scoring_tiers_summary": "11-12 months=10, 9-10=8, 7-8=6, 5-6=4, under 5=2",
       "important_caveats": "Current deck may later swap this for CoV.",
@@ -141,13 +141,13 @@
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "demand_consistency"
         },
         "sunco_com": {
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "demand_consistency"
         }
       }
     },
@@ -160,7 +160,7 @@
         "known"
       ],
       "controllability": "market_context",
-      "current_support": "planned",
+      "current_support": "implemented",
       "scoring_logic_summary": "Revenue concentration and repeat-rate by buyer, with inverted channel logic.",
       "scoring_tiers_summary": "Thresholds TBD from data; Amazon favors distributed demand, Sunco favors concentrated contractor demand with guards.",
       "important_caveats": "Scoring is inverted between Amazon and Sunco.com.",
@@ -169,13 +169,13 @@
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "bulk_buyer_analysis"
         },
         "sunco_com": {
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "bulk_buyer_analysis"
         }
       }
     },
@@ -188,7 +188,7 @@
         "known"
       ],
       "controllability": "market_context",
-      "current_support": "planned",
+      "current_support": "implemented",
       "scoring_logic_summary": "Average month-by-month YoY growth over 24 months.",
       "scoring_tiers_summary": "Percentile-ranked within channel family distribution.",
       "important_caveats": "Relative percentile, not absolute growth.",
@@ -197,13 +197,13 @@
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "sales_trend"
         },
         "sunco_com": {
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "direct",
-          "strategy": null
+          "strategy": "sales_trend"
         }
       }
     },
@@ -275,7 +275,7 @@
         "new"
       ],
       "controllability": "post_launch_only",
-      "current_support": "planned",
+      "current_support": "partial",
       "scoring_logic_summary": "Rating and review count versus segment benchmark, revenue-weighted.",
       "scoring_tiers_summary": "Thresholds TBD",
       "important_caveats": "Sunco.com is permanently N/A; new families only activate at G5.",
@@ -412,7 +412,7 @@
           "earliest_gate": "G4",
           "latest_gate": "G5",
           "source_type": "proxy",
-          "strategy": null
+          "strategy": "gmc_visibility_proxy"
         }
       }
     },
@@ -464,7 +464,7 @@
           "earliest_gate": "G1",
           "latest_gate": "G5",
           "source_type": "proxy",
-          "strategy": null
+          "strategy": "gmc_visibility_proxy"
         },
         "sunco_com": {
           "earliest_gate": "G1",
