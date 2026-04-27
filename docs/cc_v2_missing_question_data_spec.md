@@ -78,3 +78,4 @@
 - One customer-grain query can feed Q3.
 - Q4 percentile scoring is a batch operation across families in the same channel.
 - Channel IDs are currently Amazon `11929` and Shopify/Sunco.com `12585`.
+- When Postgres is unavailable, the FY2025 local Amazon sales export can be used as a proxy fallback for monthly Amazon rows only. That supports partial `Q2` coverage and limited `Q4` prep, but it does not provide customer concentration for `Q3` and should remain a lower-confidence source.

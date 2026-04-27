@@ -175,6 +175,12 @@ def reference_monthly_sales_rows(packet: dict[str, Any], channel: str) -> list[d
     return rows
 
 
+def reference_family_metrics_source(packet: dict[str, Any]) -> str | None:
+    """Return the reference family-metrics source label when present."""
+    reference = as_dict(packet.get("reference_baseline"))
+    return normalize_text(reference.get("family_metrics_source"))
+
+
 def score_by_thresholds(value: float | None, thresholds: list[tuple[float, float]]) -> float | None:
     if value is None:
         return None
@@ -231,11 +237,19 @@ def score_demand_consistency(packet: dict[str, Any], channel: str) -> dict[str, 
     else:
         score = 2
 
+    source = reference_family_metrics_source(packet)
+    evidence_type = "direct"
+    source_note = ""
+    if source and source != "POSTGRES_MCP":
+        evidence_type = "proxy"
+        score = min(score, 8)
+        source_note = f" Source={source.lower()}."
+
     return {
         "status": "scored",
         "score": float(score),
-        "evidence_type": "direct",
-        "evidence": f"{active_months} active months with orders in the trailing {len(trailing)} months.",
+        "evidence_type": evidence_type,
+        "evidence": f"{active_months} active months with orders in the trailing {len(trailing)} months.{source_note}",
     }
 
 
@@ -315,11 +329,18 @@ def score_sales_trend(packet: dict[str, Any], channel: str) -> dict[str, Any]:
     if len(yoy_deltas) < 12:
         score = min(score, 8)
 
+    source = reference_family_metrics_source(packet)
+    evidence_type = "direct"
+    source_note = ""
+    if source and source != "POSTGRES_MCP":
+        evidence_type = "proxy"
+        source_note = f" Source={source.lower()}."
+
     return {
         "status": "scored",
         "score": float(score),
-        "evidence_type": "direct",
-        "evidence": f"Average YoY monthly revenue trend is {round_metric(yoy_avg)}% across {len(yoy_deltas)} month-pairs.",
+        "evidence_type": evidence_type,
+        "evidence": f"Average YoY monthly revenue trend is {round_metric(yoy_avg)}% across {len(yoy_deltas)} month-pairs.{source_note}",
     }
 
 

@@ -154,6 +154,12 @@ Generate the monthly family-metrics query bundle for `Q2` / `Q3` / `Q4` and a me
 cmd /c C:\Windows\py.exe tools\family_metrics_postgres_batch.py "C:\path\to\output\research_sessions\<session_name>"
 ```
 
+If Postgres is unavailable, you can still prefill Amazon monthly sales for matching families from the FY2025 local export. This only helps `Q2` and partial `Q4`; it does not replace customer-concentration data for `Q3`:
+
+```powershell
+cmd /c C:\Windows\py.exe tools\family_metrics_local_fallback.py "C:\path\to\family_metrics_payload_template.json"
+```
+
 Then execute those queries in a Postgres-capable environment, fill `family_metrics_payload_template.json`, and rerun session init with `--family-metrics-json` so the packets carry monthly sales and customer-concentration context:
 
 ```powershell
