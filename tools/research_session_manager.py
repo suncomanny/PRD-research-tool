@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from competitive_research_engine import build_research_packets
-from template_parser import DEFAULT_WORKBOOK, load_postgres_payloads
+from template_parser import DEFAULT_WORKBOOK, load_family_metrics_payloads, load_postgres_payloads
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -1263,6 +1263,7 @@ def initialize_session(
     session_name: str | None,
     output_root: str | None,
     postgres_json: str | None,
+    family_metrics_json: str | None,
     include_queries: bool,
     include_stackline_raw: bool,
     start_date: str | None,
@@ -1277,10 +1278,12 @@ def initialize_session(
     resolved_workbook_path = str(Path(workbook_path).resolve())
 
     postgres_payloads = load_postgres_payloads(postgres_json)
+    family_metrics_payloads = load_family_metrics_payloads(family_metrics_json)
     try:
         packet_bundle = build_research_packets(
             workbook_path=workbook_path,
             postgres_payloads=postgres_payloads,
+            family_metrics_payloads=family_metrics_payloads,
             include_queries=include_queries,
             include_stackline_raw=include_stackline_raw,
             start_date=start_date,
@@ -1386,6 +1389,7 @@ def main() -> None:
     init_parser.add_argument("--output-root", default=None, help="Optional custom session root.")
     init_parser.add_argument("--sheet", default="Ideations", help="Worksheet name to parse.")
     init_parser.add_argument("--postgres-json", default=None, help="Optional Postgres enrichment JSON.")
+    init_parser.add_argument("--family-metrics-json", default=None, help="Optional per-SKU monthly sales / customer concentration JSON.")
     init_parser.add_argument("--include-queries", action="store_true", help="Embed MCP query templates in packets.")
     init_parser.add_argument("--include-stackline-raw", action="store_true", help="Embed full Stackline analysis in packets.")
     init_parser.add_argument("--start-date", default=None, help="Override MCP start date.")
@@ -1422,6 +1426,7 @@ def main() -> None:
             session_name=args.session_name,
             output_root=args.output_root,
             postgres_json=args.postgres_json,
+            family_metrics_json=args.family_metrics_json,
             include_queries=args.include_queries,
             include_stackline_raw=args.include_stackline_raw,
             start_date=args.start_date,

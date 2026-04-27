@@ -146,8 +146,8 @@ def build_column_specs(worksheet) -> list[dict[str, Any]]:
     return specs
 
 
-def load_postgres_payloads(path: str | None) -> dict[str, dict[str, Any]]:
-    """Load per-SKU Postgres enrichment payloads from JSON."""
+def load_sku_payloads(path: str | None) -> dict[str, dict[str, Any]]:
+    """Load per-SKU payloads from a dict or list JSON artifact."""
     if not path:
         return {}
 
@@ -177,7 +177,43 @@ def load_postgres_payloads(path: str | None) -> dict[str, dict[str, Any]]:
             }
         return payloads
 
-    raise ValueError("Unsupported --postgres-json format. Use a dict or list of dicts.")
+    raise ValueError("Unsupported payload JSON format. Use a dict or list of dicts.")
+
+
+def load_postgres_payloads(path: str | None) -> dict[str, dict[str, Any]]:
+    """Load per-SKU Postgres enrichment payloads from JSON."""
+    return load_sku_payloads(path)
+
+
+def load_family_metrics_payloads(path: str | None) -> dict[str, dict[str, Any]]:
+    """Load per-SKU family metrics enrichment payloads from JSON."""
+    return load_sku_payloads(path)
+
+
+def merge_family_metrics_data(
+    reference_context: dict[str, Any] | None,
+    family_metrics_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge monthly/customer family metrics into the reference context."""
+    merged = dict(reference_context or {})
+    if not family_metrics_payload:
+        return merged
+
+    for key in (
+        "monthly_sales",
+        "customer_concentration",
+        "sales_trend",
+        "gmc_visibility",
+        "family_metrics_source",
+        "family_metrics_period_label",
+        "family_metrics_notes",
+    ):
+        value = family_metrics_payload.get(key)
+        if value not in (None, "", [], {}):
+            merged[key] = value
+
+    merged["family_metrics_enrichment_provided"] = True
+    return merged
 
 
 def build_stackline_context(
@@ -290,6 +326,7 @@ def build_stackline_context(
 def parse_template(
     workbook_path: str,
     postgres_payloads: dict[str, dict[str, Any]] | None = None,
+    family_metrics_payloads: dict[str, dict[str, Any]] | None = None,
     include_queries: bool = False,
     include_stackline_raw: bool = False,
     start_date: str | None = None,
@@ -300,6 +337,7 @@ def parse_template(
 ) -> dict[str, Any]:
     """Parse the ideations sheet into enriched ideation objects."""
     payloads = postgres_payloads or {}
+    family_metrics = family_metrics_payloads or {}
     resolved_stackline_folder = Path(stackline_folder) if stackline_folder else STACKLINE_DIR
     workbook = load_workbook(workbook_path, data_only=True)
     if sheet_name not in workbook.sheetnames:
@@ -353,6 +391,13 @@ def parse_template(
             if postgres_payload:
                 reference_context = merge_postgres_data(reference_context, postgres_payload)
 
+            family_metrics_payload = family_metrics.get(normalized_sku)
+            if family_metrics_payload:
+                reference_context = merge_family_metrics_data(
+                    reference_context,
+                    family_metrics_payload,
+                )
+
             if include_queries:
                 reference_context["postgres_queries"] = build_mcp_queries(
                     normalized_sku,
@@ -361,6 +406,7 @@ def parse_template(
                 )
 
             reference_context["postgres_enrichment_provided"] = bool(postgres_payload)
+            reference_context["family_metrics_enrichment_provided"] = bool(family_metrics_payload)
 
             if not reference_context.get("found"):
                 issues.append(
@@ -425,6 +471,11 @@ def main() -> None:
         help="JSON file with per-SKU Postgres enrichment payloads.",
     )
     parser.add_argument(
+        "--family-metrics-json",
+        default=None,
+        help="JSON file with per-SKU monthly sales and customer concentration payloads.",
+    )
+    parser.add_argument(
         "--include-queries",
         action="store_true",
         help="Include MCP query templates for each parsed Reference SKU.",
@@ -462,9 +513,11 @@ def main() -> None:
     args = parser.parse_args()
 
     postgres_payloads = load_postgres_payloads(args.postgres_json)
+    family_metrics_payloads = load_family_metrics_payloads(args.family_metrics_json)
     parsed = parse_template(
         workbook_path=args.workbook,
         postgres_payloads=postgres_payloads,
+        family_metrics_payloads=family_metrics_payloads,
         include_queries=args.include_queries,
         include_stackline_raw=args.include_stackline_raw,
         start_date=args.start_date,

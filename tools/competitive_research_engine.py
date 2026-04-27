@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from template_parser import DEFAULT_WORKBOOK, load_postgres_payloads, parse_template
+from template_parser import DEFAULT_WORKBOOK, load_family_metrics_payloads, load_postgres_payloads, parse_template
 
 
 DEFAULT_CAPTURE_FIELDS = [
@@ -554,6 +554,13 @@ def build_reference_baseline(ideation: dict[str, Any]) -> dict[str, Any] | None:
             "amazon_data_source": reference.get("amazon_data_source"),
             "sales_period_label": reference.get("sales_period_label"),
             "reference_data_source": reference.get("reference_data_source"),
+            "monthly_sales": reference.get("monthly_sales"),
+            "customer_concentration": reference.get("customer_concentration"),
+            "sales_trend": reference.get("sales_trend"),
+            "gmc_visibility": reference.get("gmc_visibility"),
+            "family_metrics_source": reference.get("family_metrics_source"),
+            "family_metrics_period_label": reference.get("family_metrics_period_label"),
+            "family_metrics_notes": reference.get("family_metrics_notes"),
         }
     )
 
@@ -1046,6 +1053,7 @@ def build_packet(ideation: dict[str, Any]) -> dict[str, Any]:
 def build_research_packets(
     workbook_path: str,
     postgres_payloads: dict[str, dict[str, Any]] | None = None,
+    family_metrics_payloads: dict[str, dict[str, Any]] | None = None,
     include_queries: bool = False,
     include_stackline_raw: bool = False,
     start_date: str | None = None,
@@ -1058,6 +1066,7 @@ def build_research_packets(
     parsed = parse_template(
         workbook_path=workbook_path,
         postgres_payloads=postgres_payloads,
+        family_metrics_payloads=family_metrics_payloads,
         include_queries=include_queries,
         include_stackline_raw=include_stackline_raw,
         start_date=start_date,
@@ -1098,6 +1107,11 @@ def main() -> None:
         help="Optional JSON file with per-SKU Postgres enrichment payloads.",
     )
     parser.add_argument(
+        "--family-metrics-json",
+        default=None,
+        help="Optional JSON file with per-SKU monthly sales and customer concentration payloads.",
+    )
+    parser.add_argument(
         "--include-queries",
         action="store_true",
         help="Include MCP query templates for each parsed Reference SKU.",
@@ -1135,9 +1149,11 @@ def main() -> None:
     args = parser.parse_args()
 
     postgres_payloads = load_postgres_payloads(args.postgres_json)
+    family_metrics_payloads = load_family_metrics_payloads(args.family_metrics_json)
     result = build_research_packets(
         workbook_path=args.workbook,
         postgres_payloads=postgres_payloads,
+        family_metrics_payloads=family_metrics_payloads,
         include_queries=args.include_queries,
         include_stackline_raw=args.include_stackline_raw,
         start_date=args.start_date,

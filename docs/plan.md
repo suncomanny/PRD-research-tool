@@ -292,6 +292,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [x] Add a first-pass gate-readiness rubric layer for `G1` / `G2`, with explicit `N/A` handling, pillar redistribution, evidence confidence, and highest-impact vendor request outputs
 - [x] Persist the CC V2 methodology extract in `docs/cc_v2_methodology_spec.md` and align early-gate activation rules so `Q15-Q17` stay out of `G1/G2` weighted scoring until their required inputs exist
 - [x] Treat the question-level activation rules as runtime source of truth when they conflict with the deck's aggregate gate counts by one question
+- [x] Add a `family_metrics_postgres_batch.py` helper plus `--family-metrics-json` packet merge path so Q2/Q3/Q4 monthly sales and customer-concentration data can be injected without blocking other scoring work
 - [ ] `5B` Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
 - [x] Add a targeted price-enrichment pass so later rows do not rely only on snippet-level price capture
 - [ ] `5C` Generate per-attribute recommendations with impact scores and rank competitors by relevance

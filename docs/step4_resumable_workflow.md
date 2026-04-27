@@ -148,6 +148,18 @@ Then execute the generated queries in a Postgres-capable environment, fill `refe
 cmd /c C:\Windows\py.exe tools\research_session_manager.py init "C:\path\to\PRD_Research_Template.xlsx" --session-name <session_name> --output-root "C:\path\to\output\research_sessions" --postgres-json "C:\path\to\reference_postgres_payload_template.json"
 ```
 
+Generate the monthly family-metrics query bundle for `Q2` / `Q3` / `Q4` and a merge-ready payload template:
+
+```powershell
+cmd /c C:\Windows\py.exe tools\family_metrics_postgres_batch.py "C:\path\to\output\research_sessions\<session_name>"
+```
+
+Then execute those queries in a Postgres-capable environment, fill `family_metrics_payload_template.json`, and rerun session init with `--family-metrics-json` so the packets carry monthly sales and customer-concentration context:
+
+```powershell
+cmd /c C:\Windows\py.exe tools\research_session_manager.py init "C:\path\to\PRD_Research_Template.xlsx" --session-name <session_name> --output-root "C:\path\to\output\research_sessions" --postgres-json "C:\path\to\reference_postgres_payload_template.json" --family-metrics-json "C:\path\to\family_metrics_payload_template.json"
+```
+
 Use `instructions/STEP4_PROMPT.md` as the one-task template for raw collection. `instructions/COLLECTOR_NEXT.md` is the generic handoff file when Claude is unstable or Codex is taking over. The unit of work is always `1 row x 1 channel`.
 
 ## Status Contract
