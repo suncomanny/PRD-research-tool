@@ -1,24 +1,29 @@
 {
-  "version": "2026-04-27-g1g2-v1",
+  "version": "2026-04-27-cc-v2-g1g2-v2",
   "score_scale": "0_to_10",
+  "implementation_scope": "First-pass Gate 1 / Gate 2 scoring with explicit unsupported questions and evidence confidence.",
   "pillars": [
     {
       "id": "sales",
+      "methodology_id": "SALES",
       "label": "Sales",
       "weight": 35
     },
     {
       "id": "competition",
+      "methodology_id": "COMP",
       "label": "Competition",
       "weight": 30
     },
     {
       "id": "market",
+      "methodology_id": "MARKET",
       "label": "Market",
       "weight": 15
     },
     {
       "id": "logistics",
+      "methodology_id": "LOG",
       "label": "Logistics",
       "weight": 20
     }
@@ -45,332 +50,541 @@
       "label": "Launch / Post-Launch"
     }
   ],
+  "gate_activation_summary": [
+    {
+      "gate": "G1",
+      "amazon_known": 14,
+      "amazon_new": 7,
+      "sunco_known": 5,
+      "sunco_new": 1
+    },
+    {
+      "gate": "G2",
+      "amazon_known": 14,
+      "amazon_new": 7,
+      "sunco_known": 10,
+      "sunco_new": 6
+    },
+    {
+      "gate": "G3",
+      "amazon_known": 16,
+      "amazon_new": 9,
+      "sunco_known": 12,
+      "sunco_new": 8
+    },
+    {
+      "gate": "G4",
+      "amazon_known": 16,
+      "amazon_new": 9,
+      "sunco_known": 13,
+      "sunco_new": 9
+    },
+    {
+      "gate": "G5",
+      "amazon_known": 17,
+      "amazon_new": 17,
+      "sunco_known": 14,
+      "sunco_new": 14
+    }
+  ],
+  "gate_activation_note": "Question-level rules are treated as source of truth. The deck's aggregate G1/G2 counts for known Amazon and known Sunco.com conflict with the explicit question activation table by one question.",
   "redistribution_rules": {
-    "inactive_question_weight": "Redistribute within the same pillar across the remaining active questions.",
-    "inactive_pillar_weight": "Redistribute across the remaining pillars with at least one active scored question."
+    "inactive_question_weight": "Redistribute equally within the same pillar across active questions.",
+    "inactive_pillar_weight": "Redistribute proportionally across remaining active pillars.",
+    "pillar_score": "Average of active question scores within the pillar.",
+    "weighted_score": "Sum of active pillar averages times effective weights, normalized to 0-10."
   },
   "questions": [
     {
-      "id": "sales_volume",
+      "id": "Q1",
       "label": "Volume",
       "pillar": "sales",
-      "controllability": "reference_anchor",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known"
+      ],
+      "controllability": "market_context",
       "current_support": "implemented",
-      "family_states": ["known"],
+      "scoring_logic_summary": "12-month revenue per family per channel from sales history.",
+      "scoring_tiers_summary": ">=500K=10, >=300K=9, >=100K=8, >=50K=6, >=10K=4, >=5K=3, else=1",
+      "important_caveats": "New families are N/A.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": "reference_channel_revenue"
         },
         "sunco_com": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": "reference_channel_revenue"
         }
       }
     },
     {
-      "id": "sales_demand_consistency",
+      "id": "Q2",
       "label": "Demand Consistency",
       "pillar": "sales",
-      "controllability": "reference_anchor",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known"
+      ],
+      "controllability": "market_context",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Distinct months with sales over the trailing 12 months.",
+      "scoring_tiers_summary": "11-12 months=10, 9-10=8, 7-8=6, 5-6=4, under 5=2",
+      "important_caveats": "Current deck may later swap this for CoV.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         },
         "sunco_com": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         }
       }
     },
     {
-      "id": "sales_bulk_buyer_analysis",
+      "id": "Q3",
       "label": "Bulk Buyer Analysis",
       "pillar": "sales",
-      "controllability": "reference_anchor",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known"
+      ],
+      "controllability": "market_context",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Revenue concentration and repeat-rate by buyer, with inverted channel logic.",
+      "scoring_tiers_summary": "Thresholds TBD from data; Amazon favors distributed demand, Sunco favors concentrated contractor demand with guards.",
+      "important_caveats": "Scoring is inverted between Amazon and Sunco.com.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         },
         "sunco_com": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         }
       }
     },
     {
-      "id": "sales_trend",
+      "id": "Q4",
       "label": "Sales Trend",
       "pillar": "sales",
-      "controllability": "reference_anchor",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known"
+      ],
+      "controllability": "market_context",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Average month-by-month YoY growth over 24 months.",
+      "scoring_tiers_summary": "Percentile-ranked within channel family distribution.",
+      "important_caveats": "Relative percentile, not absolute growth.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         },
         "sunco_com": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         }
       }
     },
     {
-      "id": "competition_brand_count",
+      "id": "Q5",
       "label": "Brand Count",
       "pillar": "competition",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "market_context",
       "current_support": "partial",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Count of brands in the segment with a non-linear sweet spot.",
+      "scoring_tiers_summary": "0-2=2, 3-8=8-10, 9-15=6, 20+=4-6",
+      "important_caveats": "Amazon is direct Stackline; Sunco.com is still unimplemented proxy.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": "stackline_brand_count"
         },
         "sunco_com": {
           "earliest_gate": "G2",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": null
         }
       }
     },
     {
-      "id": "competition_price_position",
+      "id": "Q6",
       "label": "Price Position",
       "pillar": "competition",
-      "controllability": "controllable_ideation",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
+      "controllability": "reference_anchor",
       "current_support": "implemented",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Sunco price versus competitive median or trade-portal proxy.",
+      "scoring_tiers_summary": "Below median=high, above median=low",
+      "important_caveats": "Current implementation uses competitive unit-price proxy rather than a pure channel median.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
-          "source_type": "proxy",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "target_price_position"
         },
         "sunco_com": {
           "earliest_gate": "G2",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": "target_price_position"
         }
       }
     },
     {
-      "id": "competition_review_strength",
+      "id": "Q7",
       "label": "Review Strength",
       "pillar": "competition",
+      "applies_to_channel": "amazon",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "post_launch_only",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Rating and review count versus segment benchmark, revenue-weighted.",
+      "scoring_tiers_summary": "Thresholds TBD",
+      "important_caveats": "Sunco.com is permanently N/A; new families only activate at G5.",
       "channel_rules": {
         "amazon": {
-          "earliest_gate": "G1",
           "source_type": "direct",
-          "strategy": null
+          "strategy": null,
+          "family_gate_rules": {
+            "known": {
+              "earliest_gate": "G1",
+              "latest_gate": "G5"
+            },
+            "new": {
+              "earliest_gate": "G5",
+              "latest_gate": "G5"
+            }
+          }
         }
       }
     },
     {
-      "id": "competition_bsr_rank",
+      "id": "Q8",
       "label": "BSR Rank",
       "pillar": "competition",
+      "applies_to_channel": "amazon",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "post_launch_only",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Family BSR percentile within the segment.",
+      "scoring_tiers_summary": "Top 10%=10, Top 25%=8, Top 50%=6, Bottom 50%=2-4",
+      "important_caveats": "Sunco.com is permanently N/A; new families only activate at G5.",
       "channel_rules": {
         "amazon": {
-          "earliest_gate": "G1",
           "source_type": "direct",
-          "strategy": null
+          "strategy": null,
+          "family_gate_rules": {
+            "known": {
+              "earliest_gate": "G1",
+              "latest_gate": "G5"
+            },
+            "new": {
+              "earliest_gate": "G5",
+              "latest_gate": "G5"
+            }
+          }
         }
       }
     },
     {
-      "id": "competition_tacos",
+      "id": "Q9",
       "label": "TACoS",
       "pillar": "competition",
-      "controllability": "post_launch_only",
+      "applies_to_channel": "amazon",
+      "family_states": [
+        "known",
+        "new"
+      ],
+      "controllability": "controllable_ideation",
       "current_support": "planned",
-      "family_states": ["known"],
+      "scoring_logic_summary": "Advertising cost intensity relative to category difficulty.",
+      "scoring_tiers_summary": "Lower TACoS=better",
+      "important_caveats": "Sunco.com is permanently N/A; new families only activate at G5.",
       "channel_rules": {
         "amazon": {
-          "earliest_gate": "G1",
           "source_type": "direct",
-          "strategy": null
+          "strategy": null,
+          "family_gate_rules": {
+            "known": {
+              "earliest_gate": "G1",
+              "latest_gate": "G5"
+            },
+            "new": {
+              "earliest_gate": "G5",
+              "latest_gate": "G5"
+            }
+          }
         }
       }
     },
     {
-      "id": "competition_competitor_growth_rate",
+      "id": "Q10",
       "label": "Competitor Growth Rate",
       "pillar": "competition",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "market_context",
       "current_support": "planned",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Rate of new brand and SKU entry into the segment.",
+      "scoring_tiers_summary": "Stable=8, 2-3 new=6, 4-6=4, 7+=2",
+      "important_caveats": "Amazon direct and Sunco proxy are both still unimplemented in the first pass.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": null
         },
         "sunco_com": {
           "earliest_gate": "G2",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": null
         }
       }
     },
     {
-      "id": "competition_segment_traffic",
+      "id": "Q11",
       "label": "Segment Traffic",
       "pillar": "competition",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "market_context",
-      "current_support": "implemented",
-      "family_states": ["known", "new"],
+      "current_support": "partial",
+      "scoring_logic_summary": "52-week segment traffic percentile.",
+      "scoring_tiers_summary": "Bottom 10%=2, P25-50=6, P50-75=8, Top 10%=10",
+      "important_caveats": "Amazon Stackline is implemented; Sunco.com remains unavailable before G4.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "direct",
           "strategy": "stackline_total_traffic"
         },
         "sunco_com": {
           "earliest_gate": "G4",
-          "source_type": "direct",
+          "latest_gate": "G5",
+          "source_type": "proxy",
           "strategy": null
         }
       }
     },
     {
-      "id": "competition_demand_persistence",
+      "id": "Q12",
       "label": "Demand Persistence",
       "pillar": "competition",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "market_context",
-      "current_support": "partial",
-      "family_states": ["known"],
+      "current_support": "implemented",
+      "scoring_logic_summary": "Traffic and velocity persistence proxy, capped below perfect confidence.",
+      "scoring_tiers_summary": "Proxy-capped score from traffic and sales stability inputs",
+      "important_caveats": "Implemented as a proxy only; score should not reach 10.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": "segment_persistence_proxy"
         },
         "sunco_com": {
           "earliest_gate": "G2",
+          "latest_gate": "G5",
           "source_type": "proxy",
-          "strategy": null
+          "strategy": "segment_persistence_proxy"
         }
       }
     },
     {
-      "id": "market_gmc_visibility",
+      "id": "Q13",
       "label": "GMC Visibility",
       "pillar": "market",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "market_context",
       "current_support": "planned",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Keyword-volume percentile as a capped proxy for GMC visibility.",
+      "scoring_tiers_summary": "Bottom 10%=2, P25-50=5, P50-75=7, Top 10%=9 (cap)",
+      "important_caveats": "Explicit proxy and capped at 9 until real GMC data exists.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": null
         },
         "sunco_com": {
-          "earliest_gate": "G2",
+          "earliest_gate": "G1",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": null
         }
       }
     },
     {
-      "id": "market_target_market_fit",
+      "id": "Q14",
       "label": "Target Market Fit",
       "pillar": "market",
-      "controllability": "controllable_ideation",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
+      "controllability": "market_context",
       "current_support": "implemented",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Demand-fit between the ideation and the channel's current buyer signals.",
+      "scoring_tiers_summary": "Channel-calibrated thresholds refreshed annually",
+      "important_caveats": "Current implementation remains a proxy derived from competitive coverage and numeric gaps.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G1",
-          "source_type": "proxy",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "target_market_fit_proxy"
         },
         "sunco_com": {
           "earliest_gate": "G2",
+          "latest_gate": "G5",
           "source_type": "proxy",
           "strategy": "target_market_fit_proxy"
         }
       }
     },
     {
-      "id": "logistics_initial_investment",
+      "id": "Q15",
       "label": "Initial Investment",
       "pillar": "logistics",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "controllable_ideation",
-      "current_support": "partial",
-      "family_states": ["known", "new"],
+      "current_support": "planned",
+      "scoring_logic_summary": "Capital requirement from MOQ cost or 150-day DOI x velocity x cost.",
+      "scoring_tiers_summary": "<1K=10, <5K=8, <10K=6, <20K=4, <50K=2, >=50K=0",
+      "important_caveats": "Not usable before vendor quotes and velocity inputs are in place.",
       "channel_rules": {
         "amazon": {
-          "earliest_gate": "G1",
-          "source_type": "proxy",
+          "earliest_gate": "G3",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "target_vendor_cost_proxy"
         },
         "sunco_com": {
-          "earliest_gate": "G1",
-          "source_type": "proxy",
+          "earliest_gate": "G3",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "target_vendor_cost_proxy"
         }
       }
     },
     {
-      "id": "logistics_fulfillment_viability",
+      "id": "Q16",
       "label": "Fulfillment Viability",
       "pillar": "logistics",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known",
+        "new"
+      ],
       "controllability": "controllable_ideation",
-      "current_support": "implemented",
-      "family_states": ["known", "new"],
+      "current_support": "partial",
+      "scoring_logic_summary": "Channel-specific margin viability once vendor cost and channel margins exist.",
+      "scoring_tiers_summary": "Higher margin tiers score higher; Amazon splits FBA/FBM, Sunco uses site margin tiers.",
+      "important_caveats": "Current implementation is only a provisional margin-conflict proxy.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G3",
-          "source_type": "proxy",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "margin_viability"
         },
         "sunco_com": {
           "earliest_gate": "G3",
-          "source_type": "proxy",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": "margin_viability"
         }
       }
     },
     {
-      "id": "logistics_inventory_health",
+      "id": "Q17",
       "label": "Inventory Health",
       "pillar": "logistics",
+      "applies_to_channel": "both",
+      "family_states": [
+        "known"
+      ],
       "controllability": "post_launch_only",
       "current_support": "planned",
-      "family_states": ["known", "new"],
+      "scoring_logic_summary": "Actual DOI versus 150-day target.",
+      "scoring_tiers_summary": "120-180 days=10, 90-120 / 180-240=7, 60-90 / 240+=4, under 60=2",
+      "important_caveats": "Post-launch only.",
       "channel_rules": {
         "amazon": {
           "earliest_gate": "G5",
-          "source_type": "post_launch_only",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": null
         },
         "sunco_com": {
           "earliest_gate": "G5",
-          "source_type": "post_launch_only",
+          "latest_gate": "G5",
+          "source_type": "direct",
           "strategy": null
         }
       }

@@ -67,7 +67,16 @@ def clamp_score(value: float) -> float:
 
 
 def family_state(packet: dict[str, Any]) -> str:
+    identity = as_dict(packet.get("identity"))
     reference = as_dict(packet.get("reference_baseline"))
+    reference_sku = normalize_text(reference.get("sku") or identity.get("sunco_reference_sku"))
+    reference_source = (normalize_text(identity.get("reference_sku_source")) or "").lower()
+
+    if "new" in reference_source and "existing" not in reference_source:
+        return "new"
+    if "existing catalog" in reference_source or reference_sku:
+        return "known"
+
     title_present = bool(normalize_text(reference.get("title")))
     listing_present = parse_number(reference.get("listing_price")) is not None
     shopify_present = parse_number(reference.get("shopify_revenue_12mo")) is not None
@@ -83,6 +92,27 @@ def gate_is_active(rule: dict[str, Any], gate_id: str) -> bool:
     if earliest is None:
         return False
     return GATE_ORDER[gate_id] >= GATE_ORDER[earliest] and GATE_ORDER[gate_id] <= GATE_ORDER[latest]
+
+
+def resolve_channel_rule(
+    question: dict[str, Any],
+    channel: str,
+    family_state_value: str,
+) -> dict[str, Any]:
+    channel_rule = as_dict(question.get("channel_rules", {}).get(channel))
+    if not channel_rule:
+        return {}
+
+    family_gate_rules = as_dict(channel_rule.get("family_gate_rules"))
+    if family_gate_rules:
+        family_rule = as_dict(family_gate_rules.get(family_state_value))
+        if not family_rule:
+            return {}
+        merged = dict(channel_rule)
+        merged.update(family_rule)
+        merged.pop("family_gate_rules", None)
+        return merged
+    return channel_rule
 
 
 def lookup_channel_context(packet: dict[str, Any], channel: str) -> dict[str, Any]:
@@ -243,7 +273,7 @@ def score_segment_persistence(packet: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "status": "scored",
-        "score": float(score),
+        "score": float(min(score, 9)),
         "evidence_type": "proxy",
         "evidence": f"Momentum proxy uses sales growth {sales_growth}, units growth {units_growth}, traffic growth {traffic_growth}.",
     }
@@ -354,7 +384,7 @@ def evaluate_question(
     if family_state_value not in question.get("family_states", []):
         return None
 
-    channel_rule = as_dict(question.get("channel_rules", {}).get(channel))
+    channel_rule = resolve_channel_rule(question, channel, family_state_value)
     if not channel_rule:
         return None
     if not gate_is_active(channel_rule, gate_id):
@@ -370,6 +400,7 @@ def evaluate_question(
             "evidence_type": channel_rule.get("source_type"),
             "reason": f"No implemented scoring strategy yet for {question['label']} on {channel}.",
             "controllability": question.get("controllability"),
+            "methodology_source_type": channel_rule.get("source_type"),
         }
 
     strategy = STRATEGIES[strategy_name]
@@ -395,6 +426,7 @@ def evaluate_question(
             "pillar": question["pillar"],
             "controllability": question.get("controllability"),
             "source_type": channel_rule.get("source_type"),
+            "methodology_source_type": channel_rule.get("source_type"),
         }
     )
     return result
@@ -536,6 +568,7 @@ def build_channel_gate_snapshot(
         "channel": channel,
         "family_state": family_state_value,
         "weighted_score": pillar_rollup.get("weighted_score"),
+        "methodology_active_questions": len(active_questions),
         "evidence_confidence": evidence,
         "pillar_scores": pillar_rollup.get("pillars"),
         "question_scores": active_questions,
@@ -602,7 +635,7 @@ def build_gate_readiness(
         "score_scale": rubric["score_scale"],
         "family_state": family_state_value,
         "primary_channel": primary_channel,
-        "methodology_scope": "Gate 1 and Gate 2 only; unsupported questions remain explicit.",
+        "methodology_scope": rubric.get("implementation_scope"),
         "summary": summary,
         "snapshots": snapshots,
     }

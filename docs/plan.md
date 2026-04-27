@@ -290,6 +290,8 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 **Goal:** Turn raw competitor data into actionable recommendations
 - [x] `5A` Analysis artifacts: write resumable `analysis/row_###_analysis.json` files with pricing benchmarks, spec coverage, launch outlook, and provisional recommendations
 - [x] Add a first-pass gate-readiness rubric layer for `G1` / `G2`, with explicit `N/A` handling, pillar redistribution, evidence confidence, and highest-impact vendor request outputs
+- [x] Persist the CC V2 methodology extract in `docs/cc_v2_methodology_spec.md` and align early-gate activation rules so `Q15-Q17` stay out of `G1/G2` weighted scoring until their required inputs exist
+- [x] Treat the question-level activation rules as runtime source of truth when they conflict with the deck's aggregate gate counts by one question
 - [ ] `5B` Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
 - [x] Add a targeted price-enrichment pass so later rows do not rely only on snippet-level price capture
 - [ ] `5C` Generate per-attribute recommendations with impact scores and rank competitors by relevance
