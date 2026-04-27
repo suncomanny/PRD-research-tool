@@ -477,6 +477,20 @@ def low_signal_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
     return rows
 
 
+def optimization_modifier_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
+    """Format active optimization modifiers for the report."""
+    rows = []
+    for item in items:
+        rows.append(
+            [
+                item.get("label"),
+                ", ".join(as_list(item.get("matched_keywords"))),
+                item.get("match_score"),
+            ]
+        )
+    return rows
+
+
 def optimization_scorecard_rows(scorecard: dict[str, Any]) -> list[list[Any]]:
     """Format optimization score components for the report."""
     rows = []
@@ -555,6 +569,7 @@ def render_row_sheet(
     vendor_requests = as_list(analysis.get("highest_impact_vendor_requests"))
     ideation_optimization = as_dict(analysis.get("ideation_optimization"))
     optimization_scorecard = as_dict(ideation_optimization.get("optimization_scorecard"))
+    optimization_modifiers = as_list(ideation_optimization.get("active_modifiers"))
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -696,10 +711,19 @@ def render_row_sheet(
         ws,
         row,
         [
+            ("Optimization Profile", ideation_optimization.get("profile_label")),
+            ("Active Modifiers", ", ".join(item.get("label") for item in optimization_modifiers if item.get("label"))),
             ("Optimization Score", optimization_scorecard.get("score")),
             ("Optimization Label", optimization_scorecard.get("label")),
             ("Optimization Confidence", optimization_scorecard.get("confidence")),
         ],
+    )
+    row = write_table(
+        ws,
+        row,
+        "Active Variant Modifiers",
+        ["Modifier", "Matched Keywords", "Match Score"],
+        optimization_modifier_rows(optimization_modifiers),
     )
     row = write_table(
         ws,

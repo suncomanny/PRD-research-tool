@@ -1076,9 +1076,44 @@ def packet_profile_haystack(packet: dict[str, Any]) -> str:
     return " ".join(label_key(value) for value in values if label_key(value))
 
 
+def matched_keywords_for_haystack(haystack: str, keywords: list[Any]) -> list[str]:
+    """Return normalized keywords that are present in the packet haystack."""
+    return [keyword for keyword in (label_key(value) for value in keywords) if keyword and keyword in haystack]
+
+
+def detect_profile_modifiers(haystack: str, profile_id: str | None) -> list[dict[str, Any]]:
+    """Detect additive profile modifiers that sharpen the base category lens."""
+    config = load_category_signal_profiles()
+    modifiers = []
+    for modifier in as_list(config.get("modifiers")):
+        applies_to = {normalize_text(value) for value in as_list(modifier.get("profile_ids")) if normalize_text(value)}
+        if applies_to and profile_id not in applies_to:
+            continue
+        excluded = matched_keywords_for_haystack(haystack, as_list(modifier.get("exclude_keywords")))
+        if excluded:
+            continue
+        matched = matched_keywords_for_haystack(haystack, as_list(modifier.get("match_keywords")))
+        minimum_matches = int(parse_number(modifier.get("minimum_matches")) or 1)
+        if len(matched) < minimum_matches:
+            continue
+        payload = dict(modifier)
+        payload["matched_keywords"] = matched
+        payload["match_score"] = len(matched)
+        modifiers.append(payload)
+    modifiers.sort(
+        key=lambda item: (
+            int(parse_number(item.get("display_order")) or 999),
+            -int(parse_number(item.get("match_score")) or 0),
+            normalize_text(item.get("label")) or "",
+        )
+    )
+    return modifiers
+
+
 def detect_category_signal_profile(packet: dict[str, Any]) -> dict[str, Any]:
     """Pick the best category-aware optimization profile for the current row."""
-    profiles = as_list(load_category_signal_profiles().get("profiles"))
+    config = load_category_signal_profiles()
+    profiles = as_list(config.get("profiles"))
     haystack = packet_profile_haystack(packet)
     generic = next((profile for profile in profiles if profile.get("id") == "generic_lighting"), {})
     best_profile = generic
@@ -1094,8 +1129,10 @@ def detect_category_signal_profile(packet: dict[str, Any]) -> dict[str, Any]:
             matched_keywords = [keyword for keyword in keywords if keyword and keyword in haystack]
 
     result = dict(best_profile)
+    active_modifiers = detect_profile_modifiers(haystack, normalize_text(best_profile.get("id")))
     result["match_score"] = best_score
     result["matched_keywords"] = matched_keywords
+    result["active_modifiers"] = active_modifiers
     return result
 
 
@@ -1125,6 +1162,32 @@ def numeric_signal_reason(entry: dict[str, Any]) -> str:
     if percentile_value is None:
         return f"{label} currently reads as {signal.replace('_', ' ')} versus the competitor set."
     return f"{label} currently lands around the {percentile_value:.0f}th percentile and reads as {signal.replace('_', ' ')}."
+
+
+def static_driver_payloads(entries: list[dict[str, Any]], tier: str) -> list[dict[str, Any]]:
+    """Normalize static config-defined drivers into the shared optimization shape."""
+    payloads = []
+    for entry in entries:
+        payloads.append(
+            compact_dict(
+                {
+                    "tier": tier,
+                    "label": normalize_text(entry.get("label")),
+                    "driver_type": normalize_text(entry.get("driver_type")) or "context",
+                    "signal": normalize_text(entry.get("signal")) or "competitive",
+                    "reason": normalize_text(entry.get("reason")) or "This variant changes what matters most for the ideation.",
+                }
+            )
+        )
+    return [entry for entry in payloads if entry]
+
+
+def merged_profile_labels(profile: dict[str, Any], modifiers: list[dict[str, Any]], field_name: str) -> list[Any]:
+    """Combine base profile labels with any additive modifier labels for the same field."""
+    merged = list(as_list(profile.get(field_name)))
+    for modifier in modifiers:
+        merged.extend(as_list(modifier.get(field_name)))
+    return merged
 
 
 def price_driver_reason(pricing_analysis: dict[str, Any]) -> str | None:
@@ -1285,6 +1348,7 @@ def build_ideation_optimization(
 ) -> dict[str, Any]:
     """Build a category-aware optimization lens that stays separate from gate readiness."""
     profile = detect_category_signal_profile(packet)
+    active_modifiers = as_list(profile.get("active_modifiers"))
     feature_coverage = as_list(spec_coverage.get("feature_coverage"))
     certification_coverage = as_list(spec_coverage.get("certification_coverage"))
     numeric_guidance = as_list(spec_coverage.get("numeric_guidance"))
@@ -1334,29 +1398,29 @@ def build_ideation_optimization(
             }
         )
 
-    for label in as_list(profile.get("primary_features")):
+    for label in merged_profile_labels(profile, active_modifiers, "primary_features"):
         entry = find_signal_entry(feature_coverage, str(label))
         if entry:
             append_driver(primary_drivers, str(label), "feature", entry, "primary")
-    for label in as_list(profile.get("primary_certifications")):
+    for label in merged_profile_labels(profile, active_modifiers, "primary_certifications"):
         entry = find_signal_entry(certification_coverage, str(label))
         if entry:
             append_driver(primary_drivers, str(label), "certification", entry, "primary")
-    for label in as_list(profile.get("primary_numeric")):
+    for label in merged_profile_labels(profile, active_modifiers, "primary_numeric"):
         entry = find_signal_entry(numeric_guidance, str(label))
         if entry:
             append_driver(primary_drivers, str(label), "numeric", entry, "primary")
 
-    for label in as_list(profile.get("secondary_features")):
+    for label in merged_profile_labels(profile, active_modifiers, "secondary_features"):
         entry = find_signal_entry(feature_coverage, str(label))
         if entry:
             append_driver(secondary_drivers, str(label), "feature", entry, "secondary")
-    for label in as_list(profile.get("secondary_certifications")):
+    for label in merged_profile_labels(profile, active_modifiers, "secondary_certifications"):
         entry = find_signal_entry(certification_coverage, str(label))
         if entry:
             append_driver(secondary_drivers, str(label), "certification", entry, "secondary")
 
-    for label in as_list(profile.get("low_signal_features")):
+    for label in merged_profile_labels(profile, active_modifiers, "low_signal_features"):
         entry = find_signal_entry(feature_coverage, str(label))
         if not entry:
             continue
@@ -1370,6 +1434,14 @@ def build_ideation_optimization(
                 }
             )
         )
+
+    primary_drivers.extend(static_driver_payloads(as_list(profile.get("static_primary_drivers")), "primary"))
+    secondary_drivers.extend(static_driver_payloads(as_list(profile.get("static_secondary_drivers")), "secondary"))
+    low_signal_attributes.extend(static_driver_payloads(as_list(profile.get("static_low_signal_attributes")), "secondary"))
+    for modifier in active_modifiers:
+        primary_drivers.extend(static_driver_payloads(as_list(modifier.get("static_primary_drivers")), "primary"))
+        secondary_drivers.extend(static_driver_payloads(as_list(modifier.get("static_secondary_drivers")), "secondary"))
+        low_signal_attributes.extend(static_driver_payloads(as_list(modifier.get("static_low_signal_attributes")), "secondary"))
 
     primary_drivers = dedupe_driver_bucket(primary_drivers)
     secondary_drivers = dedupe_driver_bucket(secondary_drivers)
@@ -1406,7 +1478,13 @@ def build_ideation_optimization(
 
     driver_labels = [normalize_text(entry.get("label")) for entry in primary_drivers if normalize_text(entry.get("label"))]
     low_signal_labels = [normalize_text(entry.get("label")) for entry in low_signal_attributes if normalize_text(entry.get("label"))]
+    modifier_labels = [normalize_text(entry.get("label")) for entry in active_modifiers if normalize_text(entry.get("label"))]
+    modifier_lenses = [normalize_text(entry.get("decision_lens_addendum")) for entry in active_modifiers if normalize_text(entry.get("decision_lens_addendum"))]
     summary_parts = [normalize_text(profile.get("decision_lens")) or "Use the category lens to separate essential spec work from lower-signal asks."]
+    if modifier_labels:
+        summary_parts.append(f"Active variant modifiers: {', '.join(modifier_labels[:4])}.")
+    if modifier_lenses:
+        summary_parts.extend(modifier_lenses[:2])
     if driver_labels:
         summary_parts.append(f"Primary decision drivers are {', '.join(driver_labels[:3])}.")
     if low_signal_labels:
@@ -1429,6 +1507,17 @@ def build_ideation_optimization(
             "profile_label": profile.get("label"),
             "decision_lens": profile.get("decision_lens"),
             "matched_keywords": profile.get("matched_keywords"),
+            "active_modifiers": [
+                compact_dict(
+                    {
+                        "id": modifier.get("id"),
+                        "label": modifier.get("label"),
+                        "matched_keywords": modifier.get("matched_keywords"),
+                        "match_score": modifier.get("match_score"),
+                    }
+                )
+                for modifier in active_modifiers
+            ],
             "optimization_confidence": optimization_confidence,
             "optimization_scorecard": scorecard,
             "summary": " ".join(summary_parts),

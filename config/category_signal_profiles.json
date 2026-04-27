@@ -1,9 +1,9 @@
 {
-  "version": "2026-04-27-v1",
+  "version": "2026-04-27-v2",
   "profiles": [
     {
       "id": "panel_troffer",
-      "label": "Panels / Troffers",
+      "label": "Commercial Panels / Troffers",
       "match_keywords": [
         "panel",
         "troffer",
@@ -11,16 +11,10 @@
         "center basket",
         "ceiling panel"
       ],
-      "decision_lens": "Prioritize usable light output, commercial controls, and channel-ready certifications before lower-signal cosmetic asks.",
+      "decision_lens": "Prioritize usable light output, installation path, commercial controls, and channel-ready certifications before lower-signal cosmetic asks.",
       "primary_features": [
-        "dimmable",
-        "0-10V",
         "0-10V dimmable",
-        "selectable wattage",
-        "selectable CCT",
-        "motion sensor",
-        "daylight sensor",
-        "emergency battery backup"
+        "Integrated LED"
       ],
       "primary_certifications": [
         "UL",
@@ -32,9 +26,10 @@
         "Output Wattage Tier"
       ],
       "secondary_features": [
-        "sensor-ready",
-        "Dry",
-        "Damp"
+        "selectable wattage",
+        "selectable CCT",
+        "Damp",
+        "IP40"
       ],
       "secondary_certifications": [
         "FCC"
@@ -162,6 +157,216 @@
       "secondary_features": [],
       "secondary_certifications": [],
       "low_signal_features": []
+    }
+  ],
+  "modifiers": [
+    {
+      "id": "panel_direct_mount",
+      "label": "Direct Mount",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 10,
+      "match_keywords": [
+        "direct mount",
+        "direct ceiling mount",
+        "surface"
+      ],
+      "decision_lens_addendum": "Treat surface-mount hardware completeness and install simplicity as go/no-go requirements before tuning secondary options.",
+      "static_primary_drivers": [
+        {
+          "label": "Surface / direct-mount installation",
+          "driver_type": "form_factor",
+          "signal": "table_stakes",
+          "reason": "This variant only works if the direct-mount install path is simple, complete, and channel-ready."
+        }
+      ]
+    },
+    {
+      "id": "panel_grid_frame",
+      "label": "Grid Frame / Sensor Receptacle",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 20,
+      "match_keywords": [
+        "grid frame",
+        "sensor receptacle"
+      ],
+      "decision_lens_addendum": "Treat the grid-frame package and downstream control-compatibility path as primary buying filters, not hidden accessories.",
+      "primary_features": [
+        "sensor-ready"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "Grid frame / receptacle path",
+          "driver_type": "form_factor",
+          "signal": "table_stakes",
+          "reason": "The grid-frame layout and sensor-receptacle path need to be explicit enough to justify the variant."
+        }
+      ]
+    },
+    {
+      "id": "panel_sensor_controls",
+      "label": "Controls / Auto-Dimming",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 30,
+      "match_keywords": [
+        "motion sensor",
+        "daylight sensor",
+        "auto dimming",
+        "autodimming",
+        "sensor-ready",
+        "sensor receptacle"
+      ],
+      "decision_lens_addendum": "Treat occupancy and daylight controls as a core commercial-controls package, not a side accessory.",
+      "primary_features": [
+        "motion sensor",
+        "daylight sensor / auto-dimming",
+        "sensor-ready"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "Commercial control package",
+          "driver_type": "controls",
+          "signal": "table_stakes",
+          "reason": "The controls story needs to be explicit enough to justify the added complexity and channel expectations."
+        }
+      ]
+    },
+    {
+      "id": "panel_emergency_backup",
+      "label": "Emergency Backup",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 40,
+      "match_keywords": [
+        "emergency battery",
+        "emergency battery backup",
+        "90 min emergency runtime",
+        "90 minute battery"
+      ],
+      "decision_lens_addendum": "Treat emergency runtime and code-adjacent claims as must-prove requirements, not optional premium add-ons.",
+      "primary_features": [
+        "emergency battery backup",
+        "90 min emergency runtime"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "Emergency egress support",
+          "driver_type": "compliance",
+          "signal": "table_stakes",
+          "reason": "Emergency-backed variants need runtime and transfer behavior to be proven, not implied."
+        }
+      ]
+    },
+    {
+      "id": "panel_high_output",
+      "label": "High Output",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 50,
+      "match_keywords": [
+        "high output",
+        "7.5klm",
+        "7500"
+      ],
+      "exclude_keywords": [
+        "ultra high output",
+        "9.5klm",
+        "9500",
+        "72w"
+      ],
+      "decision_lens_addendum": "Validate whether the higher-output step materially improves the use case enough to justify the price and margin pressure.",
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "High-output step-up",
+          "driver_type": "numeric",
+          "signal": "competitive",
+          "reason": "The higher-output jump should solve a real coverage or replacement need, not just add cost."
+        }
+      ]
+    },
+    {
+      "id": "panel_ultra_output",
+      "label": "Ultra High Output",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 60,
+      "match_keywords": [
+        "ultra high output",
+        "9.5klm",
+        "9500",
+        "72w"
+      ],
+      "decision_lens_addendum": "Treat the ultra-output step as a strategic premium move that needs clear use-case justification and margin discipline.",
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "Ultra-output requirement",
+          "driver_type": "numeric",
+          "signal": "competitive",
+          "reason": "Ultra-output variants should justify the higher wattage and lumen step with a clear replacement or coverage story."
+        }
+      ]
+    },
+    {
+      "id": "panel_center_basket_troffer",
+      "label": "Center Basket Troffer",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 70,
+      "match_keywords": [
+        "center basket",
+        "troffer",
+        "non retrofit troffer"
+      ],
+      "decision_lens_addendum": "Treat the non-retrofit troffer form factor and install context as primary filters before optimizing secondary spec knobs.",
+      "static_primary_drivers": [
+        {
+          "label": "Center basket troffer form factor",
+          "driver_type": "form_factor",
+          "signal": "table_stakes",
+          "reason": "Troffer-style buyers will filter first on fixture architecture and install fit before secondary spec upgrades."
+        }
+      ]
+    },
+    {
+      "id": "panel_high_cri",
+      "label": "High CRI",
+      "profile_ids": [
+        "panel_troffer"
+      ],
+      "display_order": 80,
+      "match_keywords": [
+        "90+ cri",
+        "90 cri"
+      ],
+      "decision_lens_addendum": "Treat the high-CRI promise as a use-case-specific quality claim that needs to earn its cost premium.",
+      "primary_numeric": [
+        "CRI"
+      ],
+      "static_primary_drivers": [
+        {
+          "label": "High CRI requirement",
+          "driver_type": "numeric",
+          "signal": "competitive",
+          "reason": "High-CRI positioning should solve a real visual-quality need rather than act as a generic premium badge."
+        }
+      ]
     }
   ]
 }
