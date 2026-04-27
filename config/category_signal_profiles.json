@@ -1,0 +1,167 @@
+{
+  "version": "2026-04-27-v1",
+  "profiles": [
+    {
+      "id": "panel_troffer",
+      "label": "Panels / Troffers",
+      "match_keywords": [
+        "panel",
+        "troffer",
+        "grid frame",
+        "center basket",
+        "ceiling panel"
+      ],
+      "decision_lens": "Prioritize usable light output, commercial controls, and channel-ready certifications before lower-signal cosmetic asks.",
+      "primary_features": [
+        "dimmable",
+        "0-10V",
+        "0-10V dimmable",
+        "selectable wattage",
+        "selectable CCT",
+        "motion sensor",
+        "daylight sensor",
+        "emergency battery backup"
+      ],
+      "primary_certifications": [
+        "UL",
+        "DLC",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "sensor-ready",
+        "Dry",
+        "Damp"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "emergency_exit",
+      "label": "Emergency / Exit",
+      "match_keywords": [
+        "emergency",
+        "exit sign",
+        "edge-lit",
+        "battery backup",
+        "nfpa"
+      ],
+      "decision_lens": "Prioritize code compliance, emergency runtime, and installation details before lumen-first optimization.",
+      "primary_features": [
+        "emergency battery backup",
+        "90 minutes emergency runtime",
+        "24 hours charge time",
+        "<1 second switching time",
+        "Wall / Ceiling",
+        "Single Face Edge-Lit"
+      ],
+      "primary_certifications": [
+        "UL",
+        "NFPA"
+      ],
+      "primary_numeric": [],
+      "secondary_features": [
+        "Dry"
+      ],
+      "secondary_certifications": [],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "bulb_consumer",
+      "label": "Bulbs / Consumer Lamps",
+      "match_keywords": [
+        "bulb",
+        "a19",
+        "a series",
+        "e26",
+        "smart"
+      ],
+      "decision_lens": "Prioritize base compatibility, smart/dimming behavior, and mainstream consumer pricing before niche claims.",
+      "primary_features": [
+        "smart connected",
+        "dimmable",
+        "E26",
+        "A19"
+      ],
+      "primary_certifications": [
+        "UL",
+        "FCC"
+      ],
+      "primary_numeric": [
+        "Lumens"
+      ],
+      "secondary_features": [
+        "Dry",
+        "selectable CCT"
+      ],
+      "secondary_certifications": [],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "wall_pack_outdoor",
+      "label": "Wall Packs / Outdoor Security",
+      "match_keywords": [
+        "wall pack",
+        "wall packs",
+        "dusk-to-dawn",
+        "photocell",
+        "full-cutoff"
+      ],
+      "decision_lens": "Prioritize photocell/control behavior, cutoff and outdoor durability, and contractor-friendly wattage bands before secondary finish details.",
+      "primary_features": [
+        "dusk-to-dawn",
+        "photocell",
+        "selectable wattage",
+        "selectable CCT",
+        "Wet",
+        "IP65"
+      ],
+      "primary_certifications": [
+        "UL",
+        "DLC"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "Wall mount"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "generic_lighting",
+      "label": "Generic Lighting",
+      "match_keywords": [],
+      "decision_lens": "Prioritize price position, core performance specs, and the features most often repeated across the competitor set.",
+      "primary_features": [
+        "dimmable"
+      ],
+      "primary_certifications": [
+        "UL"
+      ],
+      "primary_numeric": [
+        "Lumens"
+      ],
+      "secondary_features": [],
+      "secondary_certifications": [],
+      "low_signal_features": []
+    }
+  ]
+}

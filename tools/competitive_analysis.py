@@ -13,10 +13,11 @@ import json
 import math
 import re
 from collections import Counter, defaultdict
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from gate_confidence import build_gate_readiness, build_highest_impact_vendor_requests
+from gate_confidence import build_gate_readiness, build_highest_impact_vendor_requests as build_base_vendor_requests
 from research_session_manager import (
     SCHEMA_VERSION,
     artifact_path_for,
@@ -33,6 +34,7 @@ RAW_STAGE_KEYS = [
     "brick_and_mortar_collection",
     "brand_site_collection",
 ]
+PROFILE_PATH = Path(__file__).resolve().parents[1] / "config" / "category_signal_profiles.json"
 
 
 def normalize_text(value: Any) -> str | None:
@@ -94,6 +96,13 @@ def unique_preserve_order(values: list[str]) -> list[str]:
         seen.add(marker)
         result.append(value)
     return result
+
+
+@lru_cache(maxsize=1)
+def load_category_signal_profiles() -> dict[str, Any]:
+    """Load category-aware optimization profiles."""
+    with PROFILE_PATH.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def parse_number(value: Any) -> float | None:
@@ -1032,12 +1041,271 @@ def build_reference_anchor_context(packet: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def label_key(value: Any) -> str:
+    """Normalize labels for loose matching across profile configs and analysis outputs."""
+    return normalized_compare_text(value)
+
+
+def labels_match(left: Any, right: Any) -> bool:
+    """Return whether two labels are close enough to treat as the same driver."""
+    left_key = label_key(left)
+    right_key = label_key(right)
+    if not left_key or not right_key:
+        return False
+    return left_key == right_key or left_key in right_key or right_key in left_key
+
+
+def packet_profile_haystack(packet: dict[str, Any]) -> str:
+    """Build the normalized matching text used to detect the category signal profile."""
+    identity = as_dict(packet.get("identity"))
+    target_profile = as_dict(packet.get("target_profile"))
+    physical = as_dict(target_profile.get("physical"))
+    feature_watchlist = as_list(target_profile.get("feature_watchlist"))
+    reference = as_dict(packet.get("reference_baseline"))
+    values = [
+        identity.get("category"),
+        identity.get("subcategory"),
+        identity.get("ideation_name"),
+        identity.get("strategy"),
+        reference.get("product_type"),
+        physical.get("size_form_factor"),
+        physical.get("mounting_type"),
+        target_profile.get("research_notes"),
+        *feature_watchlist,
+    ]
+    return " ".join(label_key(value) for value in values if label_key(value))
+
+
+def detect_category_signal_profile(packet: dict[str, Any]) -> dict[str, Any]:
+    """Pick the best category-aware optimization profile for the current row."""
+    profiles = as_list(load_category_signal_profiles().get("profiles"))
+    haystack = packet_profile_haystack(packet)
+    generic = next((profile for profile in profiles if profile.get("id") == "generic_lighting"), {})
+    best_profile = generic
+    best_score = -1
+    matched_keywords: list[str] = []
+
+    for profile in profiles:
+        keywords = [label_key(keyword) for keyword in as_list(profile.get("match_keywords")) if label_key(keyword)]
+        score = sum(1 for keyword in keywords if keyword and keyword in haystack)
+        if score > best_score:
+            best_profile = profile
+            best_score = score
+            matched_keywords = [keyword for keyword in keywords if keyword and keyword in haystack]
+
+    result = dict(best_profile)
+    result["match_score"] = best_score
+    result["matched_keywords"] = matched_keywords
+    return result
+
+
+def find_signal_entry(entries: list[dict[str, Any]], target_label: str) -> dict[str, Any] | None:
+    """Find the first coverage/guidance entry that matches a profile driver label."""
+    for entry in entries:
+        if labels_match(entry.get("label"), target_label):
+            return entry
+    return None
+
+
+def feature_signal_reason(entry: dict[str, Any], driver_type: str) -> str:
+    """Explain why a feature/certification driver matters for this ideation."""
+    signal = normalize_text(entry.get("signal")) or "competitive"
+    coverage_pct = parse_number(entry.get("coverage_pct"))
+    label = normalize_text(entry.get("label")) or driver_type.title()
+    if coverage_pct is None:
+        return f"{label} is being tracked as a {signal.replace('_', ' ')} signal."
+    return f"{label} reads as {signal.replace('_', ' ')} at {coverage_pct:.2f}% competitor coverage."
+
+
+def numeric_signal_reason(entry: dict[str, Any]) -> str:
+    """Explain numeric positioning guidance in plain language."""
+    label = normalize_text(entry.get("label")) or "Numeric target"
+    signal = normalize_text(entry.get("signal")) or "mid_pack"
+    percentile_value = parse_number(entry.get("target_percentile"))
+    if percentile_value is None:
+        return f"{label} currently reads as {signal.replace('_', ' ')} versus the competitor set."
+    return f"{label} currently lands around the {percentile_value:.0f}th percentile and reads as {signal.replace('_', ' ')}."
+
+
+def price_driver_reason(pricing_analysis: dict[str, Any]) -> str | None:
+    """Describe the pricing driver in category-agnostic language."""
+    position = as_dict(pricing_analysis.get("target_price_position"))
+    percentile_value = parse_number(position.get("percentile"))
+    bucket = normalize_text(position.get("bucket"))
+    evaluated_value = parse_number(position.get("evaluated_value"))
+    if percentile_value is None or bucket is None or evaluated_value is None:
+        return None
+    return (
+        f"Target MSRP ${evaluated_value:.2f} sits around the {percentile_value:.0f}th percentile, "
+        f"which is a {bucket.replace('_', ' ')} market position."
+    )
+
+
+def priority_rank(priority: str | None) -> int:
+    """Map textual priority to a stable ranking score."""
+    return {"critical": 0, "high": 1, "medium": 2, "low": 3}.get((priority or "").lower(), 9)
+
+
+def build_ideation_optimization(
+    packet: dict[str, Any],
+    pricing_analysis: dict[str, Any],
+    spec_coverage: dict[str, Any],
+    performance_estimation: dict[str, Any],
+    base_vendor_requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a category-aware optimization lens that stays separate from gate readiness."""
+    profile = detect_category_signal_profile(packet)
+    feature_coverage = as_list(spec_coverage.get("feature_coverage"))
+    certification_coverage = as_list(spec_coverage.get("certification_coverage"))
+    numeric_guidance = as_list(spec_coverage.get("numeric_guidance"))
+
+    primary_drivers: list[dict[str, Any]] = []
+    secondary_drivers: list[dict[str, Any]] = []
+    low_signal_attributes: list[dict[str, Any]] = []
+
+    def append_driver(bucket: list[dict[str, Any]], label: str, driver_type: str, entry: dict[str, Any], tier: str) -> None:
+        signal = normalize_text(entry.get("signal"))
+        if driver_type == "numeric":
+            reason = numeric_signal_reason(entry)
+        else:
+            reason = feature_signal_reason(entry, driver_type)
+        bucket.append(
+            compact_dict(
+                {
+                    "tier": tier,
+                    "label": normalize_text(entry.get("label")) or label,
+                    "driver_type": driver_type,
+                    "signal": signal,
+                    "reason": reason,
+                }
+            )
+        )
+
+    def dedupe_driver_bucket(bucket: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen = set()
+        deduped = []
+        for entry in bucket:
+            marker = (label_key(entry.get("label")), normalize_text(entry.get("driver_type")))
+            if marker in seen:
+                continue
+            seen.add(marker)
+            deduped.append(entry)
+        return deduped
+
+    price_reason = price_driver_reason(pricing_analysis)
+    if price_reason:
+        primary_drivers.append(
+            {
+                "tier": "primary",
+                "label": "Price Position",
+                "driver_type": "pricing",
+                "signal": normalize_text(as_dict(pricing_analysis.get("target_price_position")).get("bucket")),
+                "reason": price_reason,
+            }
+        )
+
+    for label in as_list(profile.get("primary_features")):
+        entry = find_signal_entry(feature_coverage, str(label))
+        if entry:
+            append_driver(primary_drivers, str(label), "feature", entry, "primary")
+    for label in as_list(profile.get("primary_certifications")):
+        entry = find_signal_entry(certification_coverage, str(label))
+        if entry:
+            append_driver(primary_drivers, str(label), "certification", entry, "primary")
+    for label in as_list(profile.get("primary_numeric")):
+        entry = find_signal_entry(numeric_guidance, str(label))
+        if entry:
+            append_driver(primary_drivers, str(label), "numeric", entry, "primary")
+
+    for label in as_list(profile.get("secondary_features")):
+        entry = find_signal_entry(feature_coverage, str(label))
+        if entry:
+            append_driver(secondary_drivers, str(label), "feature", entry, "secondary")
+    for label in as_list(profile.get("secondary_certifications")):
+        entry = find_signal_entry(certification_coverage, str(label))
+        if entry:
+            append_driver(secondary_drivers, str(label), "certification", entry, "secondary")
+
+    for label in as_list(profile.get("low_signal_features")):
+        entry = find_signal_entry(feature_coverage, str(label))
+        if not entry:
+            continue
+        low_signal_attributes.append(
+            compact_dict(
+                {
+                    "label": normalize_text(entry.get("label")) or str(label),
+                    "driver_type": "feature",
+                    "signal": normalize_text(entry.get("signal")),
+                    "reason": feature_signal_reason(entry, "feature"),
+                }
+            )
+        )
+
+    primary_drivers = dedupe_driver_bucket(primary_drivers)
+    secondary_drivers = dedupe_driver_bucket(secondary_drivers)
+    low_signal_attributes = dedupe_driver_bucket(low_signal_attributes)
+
+    primary_keys = {label_key(entry.get("label")) for entry in primary_drivers}
+    secondary_keys = {label_key(entry.get("label")) for entry in secondary_drivers}
+    low_signal_keys = {label_key(entry.get("label")) for entry in low_signal_attributes}
+
+    scored_requests = []
+    for request in base_vendor_requests:
+        linked_metric = label_key(request.get("linked_metric"))
+        request_text = label_key(request.get("request"))
+        relevance_score = 0
+        if linked_metric == "margin_viability":
+            relevance_score += 30
+        if linked_metric in primary_keys or any(key and key in request_text for key in primary_keys):
+            relevance_score += 35
+        elif linked_metric in secondary_keys or any(key and key in request_text for key in secondary_keys):
+            relevance_score += 15
+        if linked_metric in low_signal_keys or any(key and key in request_text for key in low_signal_keys):
+            relevance_score -= 20
+        scored_requests.append((priority_rank(normalize_text(request.get("priority"))), -relevance_score, request))
+
+    vendor_requests = []
+    seen_requests = set()
+    for _, _, request in sorted(scored_requests, key=lambda item: (item[0], item[1], request_text if (request_text := label_key(item[2].get("request"))) else "")):
+        request_text = normalize_text(request.get("request"))
+        if not request_text or request_text in seen_requests:
+            continue
+        seen_requests.add(request_text)
+        vendor_requests.append(request)
+    vendor_requests = vendor_requests[:5]
+
+    driver_labels = [normalize_text(entry.get("label")) for entry in primary_drivers if normalize_text(entry.get("label"))]
+    low_signal_labels = [normalize_text(entry.get("label")) for entry in low_signal_attributes if normalize_text(entry.get("label"))]
+    summary_parts = [normalize_text(profile.get("decision_lens")) or "Use the category lens to separate essential spec work from lower-signal asks."]
+    if driver_labels:
+        summary_parts.append(f"Primary decision drivers are {', '.join(driver_labels[:3])}.")
+    if low_signal_labels:
+        summary_parts.append(f"Treat {', '.join(low_signal_labels[:2])} as lower-signal until the market need is proven.")
+
+    optimization_confidence = normalize_text(performance_estimation.get("confidence")) or "medium"
+    return compact_dict(
+        {
+            "profile_id": profile.get("id"),
+            "profile_label": profile.get("label"),
+            "decision_lens": profile.get("decision_lens"),
+            "matched_keywords": profile.get("matched_keywords"),
+            "optimization_confidence": optimization_confidence,
+            "summary": " ".join(summary_parts),
+            "primary_decision_drivers": primary_drivers,
+            "secondary_decision_drivers": secondary_drivers,
+            "low_signal_attributes": low_signal_attributes,
+            "vendor_requests": vendor_requests,
+        }
+    )
+
+
 def build_recommendations(
     packet: dict[str, Any],
     summary: dict[str, Any],
     pricing_analysis: dict[str, Any],
     spec_coverage: dict[str, Any],
     performance_estimation: dict[str, Any],
+    ideation_optimization: dict[str, Any],
 ) -> list[str]:
     """Generate concise next-step recommendations for this ideation row."""
     recommendations = []
@@ -1066,7 +1334,7 @@ def build_recommendations(
             recommendations.append(
                 f"Target MSRP ${target_msrp:.2f} is below the current comparable unit-price band of ${suggested_floor:.2f}-${suggested_ceiling:.2f}; confirm margin resilience before positioning as a value play."
             )
-        elif positioning == "aligned":
+    elif positioning == "aligned":
             recommendations.append(
                 f"Target MSRP ${target_msrp:.2f} sits inside the observed comparable unit-price band of ${suggested_floor:.2f}-${suggested_ceiling:.2f}."
             )
@@ -1125,6 +1393,14 @@ def build_recommendations(
         recommendations.append("Use competitor collection to protect Sunco share, not just to chase incremental specs.")
     elif posture == "capture_share":
         recommendations.append("Bias collection toward underpenetrated brands and price points that can win incremental share.")
+
+    optimization_summary = normalize_text(ideation_optimization.get("summary"))
+    if optimization_summary:
+        recommendations.insert(0, optimization_summary)
+    for request in as_list(ideation_optimization.get("vendor_requests"))[:2]:
+        request_text = normalize_text(as_dict(request).get("request"))
+        if request_text:
+            recommendations.append(request_text)
 
     return unique_preserve_order(recommendations)
 
@@ -1206,12 +1482,25 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
         total_candidates=summary.get("candidate_count", 0),
         blocking_issues=blocking_issues,
     )
+    base_vendor_requests = build_base_vendor_requests(
+        pricing_analysis=pricing_analysis,
+        spec_coverage=spec_coverage,
+    )
+    ideation_optimization = build_ideation_optimization(
+        packet=packet,
+        pricing_analysis=pricing_analysis,
+        spec_coverage=spec_coverage,
+        performance_estimation=performance_estimation,
+        base_vendor_requests=base_vendor_requests,
+    )
+    highest_impact_vendor_requests = as_list(ideation_optimization.get("vendor_requests")) or base_vendor_requests
     recommendations = build_recommendations(
         packet=packet,
         summary=summary,
         pricing_analysis=pricing_analysis,
         spec_coverage=spec_coverage,
         performance_estimation=performance_estimation,
+        ideation_optimization=ideation_optimization,
     )
     reference_anchor_context = build_reference_anchor_context(packet)
     gate_readiness = build_gate_readiness(
@@ -1219,10 +1508,6 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
         pricing_analysis=pricing_analysis,
         spec_coverage=spec_coverage,
         performance_estimation=performance_estimation,
-    )
-    highest_impact_vendor_requests = build_highest_impact_vendor_requests(
-        pricing_analysis=pricing_analysis,
-        spec_coverage=spec_coverage,
     )
 
     notes = unique_preserve_order(
@@ -1255,6 +1540,7 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
             "spec_coverage": spec_coverage,
             "performance_estimation": performance_estimation,
             "reference_anchor_context": reference_anchor_context,
+            "ideation_optimization": ideation_optimization,
             "gate_readiness": gate_readiness,
             "highest_impact_vendor_requests": highest_impact_vendor_requests,
             "recommendations": recommendations,

@@ -446,6 +446,37 @@ def vendor_request_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
     return rows
 
 
+def optimization_driver_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
+    """Format category-aware decision drivers for the report."""
+    rows = []
+    for item in items:
+        rows.append(
+            [
+                item.get("tier"),
+                item.get("label"),
+                item.get("driver_type"),
+                item.get("signal"),
+                item.get("reason"),
+            ]
+        )
+    return rows
+
+
+def low_signal_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
+    """Format lower-signal attributes that should be validated before over-weighting."""
+    rows = []
+    for item in items:
+        rows.append(
+            [
+                item.get("label"),
+                item.get("driver_type"),
+                item.get("signal"),
+                item.get("reason"),
+            ]
+        )
+    return rows
+
+
 def report_filename(row_number: int) -> str:
     """Return the stable report filename for a row."""
     return f"row_{row_number:03d}_research_report.xlsx"
@@ -507,6 +538,7 @@ def render_row_sheet(
     reference_anchor = as_dict(analysis.get("reference_anchor_context"))
     gate_readiness = as_dict(analysis.get("gate_readiness"))
     vendor_requests = as_list(analysis.get("highest_impact_vendor_requests"))
+    ideation_optimization = as_dict(analysis.get("ideation_optimization"))
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -642,6 +674,28 @@ def render_row_sheet(
         "Numeric Target Positioning",
         ["Metric", "Target", "Median", "P75", "Percentile", "Recommendation"],
         numeric_guidance_rows(spec_coverage),
+    )
+    row = merged_text_row(ws, row, "Category Optimization Summary", ideation_optimization.get("summary"))
+    row = write_table(
+        ws,
+        row,
+        "Primary Decision Drivers",
+        ["Tier", "Driver", "Type", "Signal", "Why It Matters"],
+        optimization_driver_rows(as_list(ideation_optimization.get("primary_decision_drivers"))),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Secondary Decision Drivers",
+        ["Tier", "Driver", "Type", "Signal", "Why It Matters"],
+        optimization_driver_rows(as_list(ideation_optimization.get("secondary_decision_drivers"))),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Validate Before Over-Weighting",
+        ["Driver", "Type", "Signal", "Reason"],
+        low_signal_rows(as_list(ideation_optimization.get("low_signal_attributes"))),
     )
     row = write_table(
         ws,
