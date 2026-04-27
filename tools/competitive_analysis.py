@@ -16,6 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from gate_confidence import build_gate_readiness, build_highest_impact_vendor_requests
 from research_session_manager import (
     SCHEMA_VERSION,
     artifact_path_for,
@@ -1213,11 +1214,22 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
         performance_estimation=performance_estimation,
     )
     reference_anchor_context = build_reference_anchor_context(packet)
+    gate_readiness = build_gate_readiness(
+        packet=packet,
+        pricing_analysis=pricing_analysis,
+        spec_coverage=spec_coverage,
+        performance_estimation=performance_estimation,
+    )
+    highest_impact_vendor_requests = build_highest_impact_vendor_requests(
+        pricing_analysis=pricing_analysis,
+        spec_coverage=spec_coverage,
+    )
 
     notes = unique_preserve_order(
         list(normalized_payload.get("notes", []))
         + [
             normalize_text(reference_anchor_context.get("do_not_overweight")) or "",
+            normalize_text(gate_readiness.get("summary")) or "",
         ]
         + (
             ["Analysis is provisional until raw collection is complete."]
@@ -1243,6 +1255,8 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
             "spec_coverage": spec_coverage,
             "performance_estimation": performance_estimation,
             "reference_anchor_context": reference_anchor_context,
+            "gate_readiness": gate_readiness,
+            "highest_impact_vendor_requests": highest_impact_vendor_requests,
             "recommendations": recommendations,
             "notes": notes,
             "blocking_issues": blocking_issues,

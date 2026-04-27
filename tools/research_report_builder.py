@@ -391,6 +391,61 @@ def numeric_guidance_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
     return rows
 
 
+def gate_readiness_snapshot_rows(gate_readiness: dict[str, Any]) -> list[list[Any]]:
+    """Format gate/channel readiness rows for the report."""
+    rows = []
+    for snapshot in as_list(gate_readiness.get("snapshots")):
+        evidence = as_dict(snapshot.get("evidence_confidence"))
+        rows.append(
+            [
+                snapshot.get("channel"),
+                snapshot.get("gate"),
+                snapshot.get("family_state"),
+                snapshot.get("weighted_score"),
+                evidence.get("score"),
+                evidence.get("label"),
+                f"{evidence.get('implemented_questions')}/{evidence.get('methodology_active_questions')}",
+            ]
+        )
+    return rows
+
+
+def gate_readiness_pillar_rows(gate_readiness: dict[str, Any]) -> list[list[Any]]:
+    """Format pillar-level rollups from the primary G2 channel snapshot."""
+    primary_channel = normalize_text(gate_readiness.get("primary_channel"))
+    for snapshot in as_list(gate_readiness.get("snapshots")):
+        if snapshot.get("channel") == primary_channel and snapshot.get("gate") == "G2":
+            rows = []
+            for pillar in as_list(snapshot.get("pillar_scores")):
+                rows.append(
+                    [
+                        pillar.get("label"),
+                        pillar.get("base_weight"),
+                        pillar.get("effective_weight"),
+                        pillar.get("average_score"),
+                        f"{pillar.get('scored_question_count')}/{pillar.get('question_count')}",
+                        pillar.get("status"),
+                    ]
+                )
+            return rows
+    return []
+
+
+def vendor_request_rows(items: list[dict[str, Any]]) -> list[list[Any]]:
+    """Format vendor optimization requests."""
+    rows = []
+    for item in items:
+        rows.append(
+            [
+                item.get("priority"),
+                item.get("linked_metric"),
+                item.get("request"),
+                item.get("reason"),
+            ]
+        )
+    return rows
+
+
 def report_filename(row_number: int) -> str:
     """Return the stable report filename for a row."""
     return f"row_{row_number:03d}_research_report.xlsx"
@@ -450,6 +505,8 @@ def render_row_sheet(
     summary = as_dict(analysis.get("summary"))
     spec_coverage = as_dict(analysis.get("spec_coverage"))
     reference_anchor = as_dict(analysis.get("reference_anchor_context"))
+    gate_readiness = as_dict(analysis.get("gate_readiness"))
+    vendor_requests = as_list(analysis.get("highest_impact_vendor_requests"))
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -503,6 +560,21 @@ def render_row_sheet(
         "Stackline Channel Comparison",
         ["Channel", "Retail Sales", "Units Sold", "Avg Price", "Sales Growth %", "Sunco Share %"],
         channel_comparison_rows(performance),
+    )
+    row = merged_text_row(ws, row, "Gate Readiness Summary", gate_readiness.get("summary"))
+    row = write_table(
+        ws,
+        row,
+        "Gate Readiness by Channel / Gate",
+        ["Channel", "Gate", "Family State", "Score", "Evidence Score", "Evidence Label", "Implemented Questions"],
+        gate_readiness_snapshot_rows(gate_readiness),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Primary G2 Pillar Rollup",
+        ["Pillar", "Base Weight", "Effective Weight", "Avg Score", "Scored Questions", "Status"],
+        gate_readiness_pillar_rows(gate_readiness),
     )
 
     row = write_table(
@@ -570,6 +642,13 @@ def render_row_sheet(
         "Numeric Target Positioning",
         ["Metric", "Target", "Median", "P75", "Percentile", "Recommendation"],
         numeric_guidance_rows(spec_coverage),
+    )
+    row = write_table(
+        ws,
+        row,
+        "Highest-Impact Vendor Requests",
+        ["Priority", "Area", "Request", "Reason"],
+        vendor_request_rows(vendor_requests),
     )
     row = write_list_section(ws, row, "Recommendations", as_list(analysis.get("recommendations")))
     row = write_list_section(ws, row, "Notes", as_list(analysis.get("notes")))
@@ -639,7 +718,7 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
         ws,
         6,
         "Completed Rows",
-        ["Row", "Ideation", "Category", "Outlook", "Confidence", "Target MSRP", "Report File"],
+        ["Row", "Ideation", "Category", "Outlook", "Confidence", "Amazon G2", "Amazon Evidence", "Report File"],
         [
             [
                 row_number,
@@ -647,7 +726,22 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
                 as_dict(packet.get("identity")).get("category"),
                 as_dict(analysis.get("performance_estimation")).get("launch_outlook"),
                 as_dict(analysis.get("performance_estimation")).get("confidence"),
-                as_dict(analysis.get("pricing_analysis")).get("target_msrp"),
+                next(
+                    (
+                        snapshot.get("weighted_score")
+                        for snapshot in as_list(as_dict(analysis.get("gate_readiness")).get("snapshots"))
+                        if snapshot.get("channel") == "amazon" and snapshot.get("gate") == "G2"
+                    ),
+                    None,
+                ),
+                next(
+                    (
+                        as_dict(snapshot.get("evidence_confidence")).get("label")
+                        for snapshot in as_list(as_dict(analysis.get("gate_readiness")).get("snapshots"))
+                        if snapshot.get("channel") == "amazon" and snapshot.get("gate") == "G2"
+                    ),
+                    None,
+                ),
                 report_filename(row_number),
             ]
             for row_number, packet, analysis, _ in payloads

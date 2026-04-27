@@ -1,0 +1,379 @@
+{
+  "version": "2026-04-27-g1g2-v1",
+  "score_scale": "0_to_10",
+  "pillars": [
+    {
+      "id": "sales",
+      "label": "Sales",
+      "weight": 35
+    },
+    {
+      "id": "competition",
+      "label": "Competition",
+      "weight": 30
+    },
+    {
+      "id": "market",
+      "label": "Market",
+      "weight": 15
+    },
+    {
+      "id": "logistics",
+      "label": "Logistics",
+      "weight": 20
+    }
+  ],
+  "gates": [
+    {
+      "id": "G1",
+      "label": "Discovery"
+    },
+    {
+      "id": "G2",
+      "label": "Market Analysis"
+    },
+    {
+      "id": "G3",
+      "label": "Investment Validation"
+    },
+    {
+      "id": "G4",
+      "label": "Monitoring Setup"
+    },
+    {
+      "id": "G5",
+      "label": "Launch / Post-Launch"
+    }
+  ],
+  "redistribution_rules": {
+    "inactive_question_weight": "Redistribute within the same pillar across the remaining active questions.",
+    "inactive_pillar_weight": "Redistribute across the remaining pillars with at least one active scored question."
+  },
+  "questions": [
+    {
+      "id": "sales_volume",
+      "label": "Volume",
+      "pillar": "sales",
+      "controllability": "reference_anchor",
+      "current_support": "implemented",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": "reference_channel_revenue"
+        },
+        "sunco_com": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": "reference_channel_revenue"
+        }
+      }
+    },
+    {
+      "id": "sales_demand_consistency",
+      "label": "Demand Consistency",
+      "pillar": "sales",
+      "controllability": "reference_anchor",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "sales_bulk_buyer_analysis",
+      "label": "Bulk Buyer Analysis",
+      "pillar": "sales",
+      "controllability": "reference_anchor",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "sales_trend",
+      "label": "Sales Trend",
+      "pillar": "sales",
+      "controllability": "reference_anchor",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_brand_count",
+      "label": "Brand Count",
+      "pillar": "competition",
+      "controllability": "market_context",
+      "current_support": "partial",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": "stackline_brand_count"
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_price_position",
+      "label": "Price Position",
+      "pillar": "competition",
+      "controllability": "controllable_ideation",
+      "current_support": "implemented",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": "target_price_position"
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": "target_price_position"
+        }
+      }
+    },
+    {
+      "id": "competition_review_strength",
+      "label": "Review Strength",
+      "pillar": "competition",
+      "controllability": "post_launch_only",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_bsr_rank",
+      "label": "BSR Rank",
+      "pillar": "competition",
+      "controllability": "post_launch_only",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_tacos",
+      "label": "TACoS",
+      "pillar": "competition",
+      "controllability": "post_launch_only",
+      "current_support": "planned",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_competitor_growth_rate",
+      "label": "Competitor Growth Rate",
+      "pillar": "competition",
+      "controllability": "market_context",
+      "current_support": "planned",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_segment_traffic",
+      "label": "Segment Traffic",
+      "pillar": "competition",
+      "controllability": "market_context",
+      "current_support": "implemented",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "direct",
+          "strategy": "stackline_total_traffic"
+        },
+        "sunco_com": {
+          "earliest_gate": "G4",
+          "source_type": "direct",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "competition_demand_persistence",
+      "label": "Demand Persistence",
+      "pillar": "competition",
+      "controllability": "market_context",
+      "current_support": "partial",
+      "family_states": ["known"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": "segment_persistence_proxy"
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "market_gmc_visibility",
+      "label": "GMC Visibility",
+      "pillar": "market",
+      "controllability": "market_context",
+      "current_support": "planned",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": null
+        }
+      }
+    },
+    {
+      "id": "market_target_market_fit",
+      "label": "Target Market Fit",
+      "pillar": "market",
+      "controllability": "controllable_ideation",
+      "current_support": "implemented",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": "target_market_fit_proxy"
+        },
+        "sunco_com": {
+          "earliest_gate": "G2",
+          "source_type": "proxy",
+          "strategy": "target_market_fit_proxy"
+        }
+      }
+    },
+    {
+      "id": "logistics_initial_investment",
+      "label": "Initial Investment",
+      "pillar": "logistics",
+      "controllability": "controllable_ideation",
+      "current_support": "partial",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": "target_vendor_cost_proxy"
+        },
+        "sunco_com": {
+          "earliest_gate": "G1",
+          "source_type": "proxy",
+          "strategy": "target_vendor_cost_proxy"
+        }
+      }
+    },
+    {
+      "id": "logistics_fulfillment_viability",
+      "label": "Fulfillment Viability",
+      "pillar": "logistics",
+      "controllability": "controllable_ideation",
+      "current_support": "implemented",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G3",
+          "source_type": "proxy",
+          "strategy": "margin_viability"
+        },
+        "sunco_com": {
+          "earliest_gate": "G3",
+          "source_type": "proxy",
+          "strategy": "margin_viability"
+        }
+      }
+    },
+    {
+      "id": "logistics_inventory_health",
+      "label": "Inventory Health",
+      "pillar": "logistics",
+      "controllability": "post_launch_only",
+      "current_support": "planned",
+      "family_states": ["known", "new"],
+      "channel_rules": {
+        "amazon": {
+          "earliest_gate": "G5",
+          "source_type": "post_launch_only",
+          "strategy": null
+        },
+        "sunco_com": {
+          "earliest_gate": "G5",
+          "source_type": "post_launch_only",
+          "strategy": null
+        }
+      }
+    }
+  ]
+}

@@ -289,6 +289,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 ### Step 5: Analysis & Recommendations Generator
 **Goal:** Turn raw competitor data into actionable recommendations
 - [x] `5A` Analysis artifacts: write resumable `analysis/row_###_analysis.json` files with pricing benchmarks, spec coverage, launch outlook, and provisional recommendations
+- [x] Add a first-pass gate-readiness rubric layer for `G1` / `G2`, with explicit `N/A` handling, pillar redistribution, evidence confidence, and highest-impact vendor request outputs
 - [ ] `5B` Calculate pricing targets (MSRP, price-per-watt, price-per-lumen)
 - [x] Add a targeted price-enrichment pass so later rows do not rely only on snippet-level price capture
 - [ ] `5C` Generate per-attribute recommendations with impact scores and rank competitors by relevance
