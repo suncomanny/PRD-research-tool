@@ -1076,6 +1076,15 @@ def packet_profile_haystack(packet: dict[str, Any]) -> str:
     return " ".join(label_key(value) for value in values if label_key(value))
 
 
+def packet_identity_labels(packet: dict[str, Any]) -> dict[str, str]:
+    """Return normalized category and subcategory labels for profile routing."""
+    identity = as_dict(packet.get("identity"))
+    return {
+        "category": label_key(identity.get("category")),
+        "subcategory": label_key(identity.get("subcategory")),
+    }
+
+
 def matched_keywords_for_haystack(haystack: str, keywords: list[Any]) -> list[str]:
     """Return normalized keywords that are present in the packet haystack."""
     return [keyword for keyword in (label_key(value) for value in keywords) if keyword and keyword in haystack]
@@ -1110,6 +1119,24 @@ def detect_profile_modifiers(haystack: str, profile_id: str | None) -> list[dict
     return modifiers
 
 
+def profile_match_score(profile: dict[str, Any], packet: dict[str, Any], haystack: str) -> tuple[int, list[str], list[str]]:
+    """Score a profile using explicit taxonomy matches first, then keyword evidence."""
+    labels = packet_identity_labels(packet)
+    matched_categories = [
+        label
+        for label in (label_key(value) for value in as_list(profile.get("category_matches")))
+        if label and label == labels.get("category")
+    ]
+    matched_subcategories = [
+        label
+        for label in (label_key(value) for value in as_list(profile.get("subcategory_matches")))
+        if label and label == labels.get("subcategory")
+    ]
+    matched_keywords = matched_keywords_for_haystack(haystack, as_list(profile.get("match_keywords")))
+    score = (40 * len(matched_categories)) + (100 * len(matched_subcategories)) + len(matched_keywords)
+    return score, matched_keywords, matched_categories + matched_subcategories
+
+
 def detect_category_signal_profile(packet: dict[str, Any]) -> dict[str, Any]:
     """Pick the best category-aware optimization profile for the current row."""
     config = load_category_signal_profiles()
@@ -1119,19 +1146,21 @@ def detect_category_signal_profile(packet: dict[str, Any]) -> dict[str, Any]:
     best_profile = generic
     best_score = -1
     matched_keywords: list[str] = []
+    matched_taxonomy: list[str] = []
 
     for profile in profiles:
-        keywords = [label_key(keyword) for keyword in as_list(profile.get("match_keywords")) if label_key(keyword)]
-        score = sum(1 for keyword in keywords if keyword and keyword in haystack)
+        score, keywords, taxonomy_hits = profile_match_score(profile, packet, haystack)
         if score > best_score:
             best_profile = profile
             best_score = score
-            matched_keywords = [keyword for keyword in keywords if keyword and keyword in haystack]
+            matched_keywords = keywords
+            matched_taxonomy = taxonomy_hits
 
     result = dict(best_profile)
     active_modifiers = detect_profile_modifiers(haystack, normalize_text(best_profile.get("id")))
     result["match_score"] = best_score
     result["matched_keywords"] = matched_keywords
+    result["matched_taxonomy"] = matched_taxonomy
     result["active_modifiers"] = active_modifiers
     return result
 
@@ -1507,6 +1536,7 @@ def build_ideation_optimization(
             "profile_label": profile.get("label"),
             "decision_lens": profile.get("decision_lens"),
             "matched_keywords": profile.get("matched_keywords"),
+            "matched_taxonomy": profile.get("matched_taxonomy"),
             "active_modifiers": [
                 compact_dict(
                     {

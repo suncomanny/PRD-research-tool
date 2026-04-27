@@ -712,6 +712,7 @@ def render_row_sheet(
         row,
         [
             ("Optimization Profile", ideation_optimization.get("profile_label")),
+            ("Profile Match Basis", ", ".join(as_list(ideation_optimization.get("matched_taxonomy"))) or ", ".join(as_list(ideation_optimization.get("matched_keywords")))),
             ("Active Modifiers", ", ".join(item.get("label") for item in optimization_modifiers if item.get("label"))),
             ("Optimization Score", optimization_scorecard.get("score")),
             ("Optimization Label", optimization_scorecard.get("label")),

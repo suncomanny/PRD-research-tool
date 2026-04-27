@@ -4,6 +4,12 @@
     {
       "id": "panel_troffer",
       "label": "Commercial Panels / Troffers",
+      "category_matches": [
+        "Indoor Commercial"
+      ],
+      "subcategory_matches": [
+        "Panels"
+      ],
       "match_keywords": [
         "panel",
         "troffer",
@@ -41,6 +47,14 @@
     {
       "id": "emergency_exit",
       "label": "Emergency / Exit",
+      "category_matches": [
+        "Indoor Commercial",
+        "Electrical"
+      ],
+      "subcategory_matches": [
+        "Emergency",
+        "Safety"
+      ],
       "match_keywords": [
         "emergency",
         "exit sign",
@@ -73,6 +87,23 @@
     {
       "id": "bulb_consumer",
       "label": "Bulbs / Consumer Lamps",
+      "category_matches": [
+        "Bulbs",
+        "Indoor Residential"
+      ],
+      "subcategory_matches": [
+        "A series",
+        "B11 series",
+        "BR series",
+        "Bulbs",
+        "G series",
+        "Lamps",
+        "MR series",
+        "PAR series",
+        "S series",
+        "Smart Lights",
+        "ST series"
+      ],
       "match_keywords": [
         "bulb",
         "a19",
@@ -106,6 +137,13 @@
     {
       "id": "wall_pack_outdoor",
       "label": "Wall Packs / Outdoor Security",
+      "category_matches": [
+        "Outdoor Commercial",
+        "Outdoor Fixtures"
+      ],
+      "subcategory_matches": [
+        "Wall Packs"
+      ],
       "match_keywords": [
         "wall pack",
         "wall packs",
@@ -139,6 +177,380 @@
       "low_signal_features": [
         "Dry"
       ]
+    },
+    {
+      "id": "outdoor_flood_area",
+      "label": "Flood / Area Lighting",
+      "category_matches": [
+        "Outdoor Commercial",
+        "Outdoor Fixtures"
+      ],
+      "subcategory_matches": [
+        "Area Lights",
+        "Flood Lights",
+        "Residential Landscape"
+      ],
+      "match_keywords": [
+        "area light",
+        "flood light",
+        "shoebox",
+        "pole",
+        "landscape"
+      ],
+      "decision_lens": "Prioritize optical distribution, outdoor durability, and controls such as photocells before secondary finish details.",
+      "primary_features": [
+        "photocell",
+        "dusk-to-dawn",
+        "Wet",
+        "IP65"
+      ],
+      "primary_certifications": [
+        "UL",
+        "DLC"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "selectable wattage",
+        "selectable CCT"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "recessed_downlight",
+      "label": "Recessed / Downlight",
+      "category_matches": [
+        "Recessed",
+        "Indoor Residential",
+        "Indoor Commercial"
+      ],
+      "subcategory_matches": [
+        "Canless",
+        "Cans",
+        "Disk",
+        "Recessed",
+        "Retrofit",
+        "Retrofit Kits"
+      ],
+      "match_keywords": [
+        "canless",
+        "downlight",
+        "retrofit",
+        "disk light",
+        "wafer"
+      ],
+      "decision_lens": "Prioritize aperture fit, install path, dimming compatibility, and moisture rating before niche cosmetic claims.",
+      "primary_features": [
+        "dimmable",
+        "selectable CCT",
+        "Integrated LED"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Lumens"
+      ],
+      "secondary_features": [
+        "Damp",
+        "Wet",
+        "IP44"
+      ],
+      "secondary_certifications": [
+        "FCC",
+        "Energy Star"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "linear_strip_shop",
+      "label": "Linears / Shop / Utility Strips",
+      "category_matches": [
+        "Indoor Commercial",
+        "Indoor Residential",
+        "Industrial"
+      ],
+      "subcategory_matches": [
+        "Linears",
+        "Shop Lights",
+        "Strip Lights",
+        "Under Cabinet",
+        "Wraparounds"
+      ],
+      "match_keywords": [
+        "linear",
+        "shop light",
+        "strip light",
+        "wraparound",
+        "under cabinet"
+      ],
+      "decision_lens": "Prioritize install simplicity, lumen coverage, and selectable controls before decorative features.",
+      "primary_features": [
+        "dimmable",
+        "selectable CCT",
+        "linkable"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "Damp"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "tube_lamp_retrofit",
+      "label": "Tubes / Lamp Retrofits",
+      "category_matches": [
+        "Tubes",
+        "Industrial",
+        "Indoor Commercial"
+      ],
+      "subcategory_matches": [
+        "Lamps",
+        "Tubes"
+      ],
+      "match_keywords": [
+        "tube",
+        "t8",
+        "t5",
+        "ballast",
+        "g13"
+      ],
+      "decision_lens": "Prioritize ballast compatibility, install method, and lumen replacement confidence before feature creep.",
+      "primary_features": [
+        "G13",
+        "Integrated LED",
+        "dimmable"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Lumens"
+      ],
+      "secondary_features": [
+        "selectable CCT"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": []
+    },
+    {
+      "id": "high_bay_industrial",
+      "label": "High Bay / Industrial",
+      "category_matches": [
+        "High Bays + Low Bays",
+        "Industrial"
+      ],
+      "subcategory_matches": [
+        "UFO"
+      ],
+      "match_keywords": [
+        "high bay",
+        "ufo",
+        "warehouse",
+        "hook mount"
+      ],
+      "decision_lens": "Prioritize output density, mounting hardware, and commercial certifications before lower-signal accessories.",
+      "primary_features": [
+        "dimmable",
+        "0-10V dimmable",
+        "sensor-ready"
+      ],
+      "primary_certifications": [
+        "UL",
+        "DLC"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "motion sensor",
+        "Damp"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": []
+    },
+    {
+      "id": "vaportight_canopy",
+      "label": "Vapor Tight / Canopy",
+      "category_matches": [
+        "Outdoor Commercial",
+        "Industrial"
+      ],
+      "subcategory_matches": [
+        "Canopy",
+        "Vapor Tights"
+      ],
+      "match_keywords": [
+        "vapor tight",
+        "canopy",
+        "parking garage",
+        "wet location"
+      ],
+      "decision_lens": "Prioritize wet-location durability, install environment, and impact-ready construction before secondary tuning.",
+      "primary_features": [
+        "Wet",
+        "IP65",
+        "dimmable"
+      ],
+      "primary_certifications": [
+        "UL",
+        "DLC"
+      ],
+      "primary_numeric": [
+        "Lumens",
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [
+        "motion sensor"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": [
+        "Dry"
+      ]
+    },
+    {
+      "id": "decorative_fixture",
+      "label": "Decorative / Residential Fixture",
+      "category_matches": [
+        "Indoor Residential",
+        "Outdoor Fixtures"
+      ],
+      "subcategory_matches": [
+        "Bathroom Fans",
+        "Ceiling Fixtures",
+        "Pendants",
+        "Residential",
+        "Vanity",
+        "Wall Sconces"
+      ],
+      "match_keywords": [
+        "vanity",
+        "pendant",
+        "ceiling fixture",
+        "sconce",
+        "bathroom fan"
+      ],
+      "decision_lens": "Prioritize fit, finish, install path, and mainstream residential pricing before niche performance extras.",
+      "primary_features": [
+        "dimmable",
+        "selectable CCT"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Lumens"
+      ],
+      "secondary_features": [
+        "Damp"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": []
+    },
+    {
+      "id": "electrical_controls_accessory",
+      "label": "Electrical / Controls / Accessory",
+      "category_matches": [
+        "Accessory",
+        "Electrical"
+      ],
+      "subcategory_matches": [
+        "Accessory",
+        "Dimmers",
+        "Receptacles",
+        "Sensors",
+        "Wire"
+      ],
+      "match_keywords": [
+        "sensor",
+        "dimmer",
+        "receptacle",
+        "wire",
+        "accessory"
+      ],
+      "decision_lens": "Prioritize compatibility, control behavior, and install clarity before broad feature accumulation.",
+      "primary_features": [
+        "smart connected",
+        "motion sensor",
+        "daylight sensor / auto-dimming"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [],
+      "secondary_features": [
+        "dimmable"
+      ],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": []
+    },
+    {
+      "id": "grow_light_horticulture",
+      "label": "Grow Lights / Horticulture",
+      "category_matches": [
+        "Grow Lights"
+      ],
+      "subcategory_matches": [],
+      "match_keywords": [
+        "grow light",
+        "ppf",
+        "ppe",
+        "horticulture",
+        "spectrum"
+      ],
+      "decision_lens": "Prioritize horticulture output metrics, spectrum positioning, and thermal design before generic lighting comparisons.",
+      "primary_features": [
+        "dimmable",
+        "smart connected"
+      ],
+      "primary_certifications": [
+        "UL",
+        "ETL"
+      ],
+      "primary_numeric": [
+        "Output Wattage Tier"
+      ],
+      "secondary_features": [],
+      "secondary_certifications": [
+        "FCC"
+      ],
+      "low_signal_features": []
     },
     {
       "id": "generic_lighting",
