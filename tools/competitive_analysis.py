@@ -987,6 +987,50 @@ def build_performance_estimation(
     )
 
 
+def build_reference_anchor_context(packet: dict[str, Any]) -> dict[str, Any]:
+    """Explain how the reference SKU should be used in downstream reasoning."""
+    reference = as_dict(packet.get("reference_baseline"))
+    shopify_revenue = parse_number(reference.get("shopify_revenue_12mo"))
+    amazon_revenue = parse_number(reference.get("amazon_revenue_12mo"))
+    listing_price = parse_number(reference.get("listing_price"))
+    listing_price_note = normalize_text(reference.get("listing_price_note"))
+
+    title_present = bool(normalize_text(reference.get("title")))
+    listing_present = listing_price is not None
+    has_any_sales = shopify_revenue is not None or amazon_revenue is not None
+    both_sales_present = shopify_revenue is not None and amazon_revenue is not None
+
+    if title_present and listing_present and both_sales_present and not listing_price_note:
+        data_quality = "strong_anchor_context"
+    elif title_present and (listing_present or has_any_sales):
+        data_quality = "usable_anchor_context"
+    elif title_present or has_any_sales:
+        data_quality = "limited_anchor_context"
+    else:
+        data_quality = "weak_anchor_context"
+
+    caution_parts = []
+    if listing_price_note:
+        caution_parts.append("Postgres listing price was rejected, so the report keeps a fallback listing price.")
+    if not both_sales_present:
+        caution_parts.append("Channel sales coverage is incomplete, so commercial context is directional only.")
+    if not listing_present:
+        caution_parts.append("Listing price is missing, so do not use the anchor for direct MSRP calibration.")
+    if not caution_parts:
+        caution_parts.append("Use this anchor as category and schema context first; competitor and Stackline evidence should still drive final pricing and spec decisions.")
+
+    return compact_dict(
+        {
+            "anchor_role": "category_schema_anchor",
+            "primary_use": "Understand the incumbent Sunco family, expected feature schema, and relevant product language for this ideation.",
+            "secondary_use": "Provide a directional commercial sanity check on existing price points and channel presence.",
+            "do_not_overweight": "Do not let the reference anchor override Stackline market context or the broader competitor set when setting final MSRP or feature priorities.",
+            "data_quality": data_quality,
+            "caution": " ".join(caution_parts),
+        }
+    )
+
+
 def build_recommendations(
     packet: dict[str, Any],
     summary: dict[str, Any],
@@ -1168,9 +1212,13 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
         spec_coverage=spec_coverage,
         performance_estimation=performance_estimation,
     )
+    reference_anchor_context = build_reference_anchor_context(packet)
 
     notes = unique_preserve_order(
         list(normalized_payload.get("notes", []))
+        + [
+            normalize_text(reference_anchor_context.get("do_not_overweight")) or "",
+        ]
         + (
             ["Analysis is provisional until raw collection is complete."]
             if status == "in_progress"
@@ -1194,6 +1242,7 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
             "pricing_analysis": pricing_analysis,
             "spec_coverage": spec_coverage,
             "performance_estimation": performance_estimation,
+            "reference_anchor_context": reference_anchor_context,
             "recommendations": recommendations,
             "notes": notes,
             "blocking_issues": blocking_issues,

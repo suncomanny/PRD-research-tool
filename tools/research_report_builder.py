@@ -449,6 +449,7 @@ def render_row_sheet(
     pricing = as_dict(analysis.get("pricing_analysis"))
     summary = as_dict(analysis.get("summary"))
     spec_coverage = as_dict(analysis.get("spec_coverage"))
+    reference_anchor = as_dict(analysis.get("reference_anchor_context"))
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -458,7 +459,7 @@ def render_row_sheet(
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=10)
 
     row = 4
-    row = section_header(ws, row, "Section A - Ideation Summary")
+    row = section_header(ws, row, "Section A - Ideation + Reference Anchor Context")
     row = key_value_rows(
         ws,
         row,
@@ -466,25 +467,30 @@ def render_row_sheet(
             ("Category", identity.get("category")),
             ("Subcategory", identity.get("subcategory")),
             ("Strategy", identity.get("strategy")),
-            ("Reference SKU", identity.get("sunco_reference_sku")),
+            ("Reference Anchor SKU", identity.get("sunco_reference_sku")),
             ("Launch Outlook", performance.get("launch_outlook")),
             ("Confidence", performance.get("confidence")),
-            ("Reference Title", reference.get("title")),
-            ("Reference Title Source", reference.get("title_source")),
-            ("Reference Listing Price", reference.get("listing_price")),
+            ("Anchor Data Quality", reference_anchor.get("data_quality")),
+            ("Anchor Title", reference.get("title")),
+            ("Anchor Title Source", reference.get("title_source")),
+            ("Anchor Listing Price", reference.get("listing_price")),
             ("Listing Price Source", reference.get("listing_price_source")),
             ("Listing Price Note", reference.get("listing_price_note")),
-            ("Shopify Revenue 12mo", reference.get("shopify_revenue_12mo")),
-            ("Shopify Units 12mo", reference.get("shopify_units_12mo")),
+            ("Anchor Shopify Revenue 12mo", reference.get("shopify_revenue_12mo")),
+            ("Anchor Shopify Units 12mo", reference.get("shopify_units_12mo")),
             ("Shopify Data Source", reference.get("shopify_data_source")),
-            ("Amazon Revenue 12mo", reference.get("amazon_revenue_12mo")),
-            ("Amazon Units 12mo", reference.get("amazon_units_12mo")),
+            ("Anchor Amazon Revenue 12mo", reference.get("amazon_revenue_12mo")),
+            ("Anchor Amazon Units 12mo", reference.get("amazon_units_12mo")),
             ("Amazon Data Source", reference.get("amazon_data_source")),
-            ("Reference Data Source", reference.get("reference_data_source")),
-            ("Reference Sales Period", reference.get("sales_period_label")),
+            ("Anchor Data Source", reference.get("reference_data_source")),
+            ("Anchor Sales Period", reference.get("sales_period_label")),
         ],
     )
-    row = merged_text_row(ws, row, "Reference Image URL", reference.get("image_url"))
+    row = merged_text_row(ws, row, "Reference Anchor Role", reference_anchor.get("primary_use"))
+    row = merged_text_row(ws, row, "Reference Anchor Secondary Use", reference_anchor.get("secondary_use"))
+    row = merged_text_row(ws, row, "Reference Anchor Caution", reference_anchor.get("caution"))
+    row = merged_text_row(ws, row, "Reference Anchor Guardrail", reference_anchor.get("do_not_overweight"))
+    row = merged_text_row(ws, row, "Reference Anchor Image URL", reference.get("image_url"))
     row = merged_text_row(
         ws,
         row,

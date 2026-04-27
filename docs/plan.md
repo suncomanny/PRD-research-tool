@@ -24,7 +24,7 @@ planStatus:
 | **Output format** | Excel (.xlsx) — **one sheet per ideation** with custom-tailored layout |
 | **Output delivery** | SharePoint: `Manny Tools/Research Reports/` |
 | **Vendor identification** | Redshift/Postgres MCP query (not CSV lookup) |
-| **Reference baseline fallback** | If Postgres payloads are unavailable, use local metadata variant price plus local Shopify/Amazon sales exports as a clearly labeled fallback source |
+| **Reference anchor fallback** | If Postgres payloads are unavailable, use local metadata variant price plus local Shopify/Amazon sales exports as a clearly labeled fallback source |
 | **Research depth** | All 6 known competitors + Amazon/Home Depot/Walmart — users accept wait time |
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
@@ -215,13 +215,14 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] Git checkpoint: "Step 1 - Ideation template created"
 
 ### Step 2: Reference SKU Lightweight Lookup
-**Goal:** Script that takes a Reference SKU and returns only what's needed — the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We only pull baseline context, not full specs.
+**Goal:** Script that takes a Reference SKU and returns only what's needed — the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We use it primarily as a category / feature-schema anchor and only secondarily as a light commercial sanity check. We only pull baseline context, not full specs.
 
 **Fallback behavior:** Postgres MCP remains the preferred source for current listing price and last-12-month channel sales, but the tool can now fall back to local metadata + Shopify/Amazon sales exports when MCP payloads are unavailable. Fallback values must stay clearly labeled in the report.
 - A batch helper now generates one Postgres MCP query bundle plus a merge-ready payload template for all unique reference SKUs in a workbook/session, so true DB enrichment can be applied in one rerun instead of by hand per row.
 - The batch Postgres query helper now ranks exact SKU hits first and then falls back to family-level title/listing candidates so reference baselines are less likely to stay blank when only the SKU family exists in Postgres.
 - When Postgres returns a listing price that materially diverges from the fallback metadata listing price, the tool now keeps the fallback value and records the rejected Postgres candidate as a note for QA instead of silently overriding the report baseline.
 - A reference-baseline audit pass now classifies each unique reference SKU as `fully_trusted`, `trusted_with_fallback`, or `unresolved_manual_followup` and writes both JSON and Markdown QA artifacts into the session root.
+- Reports now frame the reference SKU as a **reference anchor**: useful for category fit, expected feature schema, and Sunco-family context, but not the primary driver of final MSRP or feature-priority decisions.
 
 **What we pull (and why):**
 | Data | Source | Why |
