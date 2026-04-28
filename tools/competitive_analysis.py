@@ -474,6 +474,17 @@ def top_brands(items: list[dict[str, Any]], limit: int = 5) -> list[dict[str, An
     return result
 
 
+def normalized_brand_count(items: list[dict[str, Any]]) -> int:
+    """Count unique normalized competitor brands."""
+    brands = {
+        brand.lower()
+        for item in items
+        for brand in [normalize_text(item.get("brand"))]
+        if brand
+    }
+    return len(brands)
+
+
 def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
     """Build pricing benchmarks and a provisional MSRP recommendation."""
     price_samples = []
@@ -1698,6 +1709,7 @@ def build_summary(
         "candidate_count": total_candidates,
         "seed_candidate_count": seed_candidate_count,
         "non_seed_candidate_count": non_seed_candidates,
+        "normalized_brand_count": normalized_brand_count(items),
         "source_channel_counts": source_counts,
         "top_brands": top_brands(items),
         "data_coverage": {
@@ -1768,6 +1780,7 @@ def build_analysis_artifact(session_dir: Path, row_number: int) -> dict[str, Any
         pricing_analysis=pricing_analysis,
         spec_coverage=spec_coverage,
         performance_estimation=performance_estimation,
+        analysis_summary=summary,
     )
 
     notes = unique_preserve_order(

@@ -232,7 +232,7 @@
           "earliest_gate": "G2",
           "latest_gate": "G5",
           "source_type": "proxy",
-          "strategy": null
+          "strategy": "stackline_brand_count"
         }
       }
     },

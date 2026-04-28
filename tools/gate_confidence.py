@@ -85,6 +85,11 @@ def clamp_score(value: float) -> float:
     return max(0.0, min(10.0, value))
 
 
+def normalized_source_label(value: Any) -> str | None:
+    text = normalize_text(value)
+    return text.lower() if text else None
+
+
 def family_state(packet: dict[str, Any]) -> str:
     identity = as_dict(packet.get("identity"))
     reference = as_dict(packet.get("reference_baseline"))
@@ -178,7 +183,17 @@ def reference_monthly_sales_rows(packet: dict[str, Any], channel: str) -> list[d
 def reference_family_metrics_source(packet: dict[str, Any]) -> str | None:
     """Return the reference family-metrics source label when present."""
     reference = as_dict(packet.get("reference_baseline"))
-    return normalize_text(reference.get("family_metrics_source"))
+    return normalized_source_label(reference.get("family_metrics_source"))
+
+
+def trailing_revenue_from_monthly_rows(rows: list[dict[str, Any]], trailing_months: int = 12) -> float | None:
+    """Return trailing revenue from monthly rows when present."""
+    if not rows:
+        return None
+    trailing = rows[-trailing_months:]
+    if not trailing:
+        return None
+    return sum(row["revenue"] for row in trailing)
 
 
 def score_by_thresholds(value: float | None, thresholds: list[tuple[float, float]]) -> float | None:
@@ -194,7 +209,24 @@ def score_reference_channel_revenue(packet: dict[str, Any], channel: str) -> dic
     reference = as_dict(packet.get("reference_baseline"))
     source_key = "amazon_data_source" if channel == "amazon" else "shopify_data_source"
     revenue_key = "amazon_revenue_12mo" if channel == "amazon" else "shopify_revenue_12mo"
-    revenue = parse_number(reference.get(revenue_key))
+    metrics = reference_channel_metrics(packet, channel)
+    family_metrics_source = reference_family_metrics_source(packet)
+    revenue = parse_number(metrics.get("total_revenue"))
+    evidence_type = "direct" if family_metrics_source == "postgres_mcp" else "proxy"
+    evidence_suffix = ""
+
+    if revenue is None:
+        revenue = trailing_revenue_from_monthly_rows(reference_monthly_sales_rows(packet, channel))
+        if revenue is not None:
+            evidence_suffix = " Derived from trailing monthly family metrics."
+
+    if revenue is None:
+        revenue = parse_number(reference.get(revenue_key))
+        source = normalized_source_label(reference.get(source_key))
+        evidence_type = "direct" if source == "postgres_mcp" else "proxy"
+        if revenue is not None and source:
+            evidence_suffix = f" Source={source}."
+
     if revenue is None:
         return {"status": "inactive_missing_source", "reason": "No channel revenue baseline is available."}
 
@@ -209,13 +241,11 @@ def score_reference_channel_revenue(packet: dict[str, Any], channel: str) -> dic
             (5000, 3),
         ],
     )
-    source = normalize_text(reference.get(source_key))
-    evidence_type = "direct" if source == "postgres_mcp" else "proxy"
     return {
         "status": "scored",
         "score": score,
         "evidence_type": evidence_type,
-        "evidence": f"Reference {channel} revenue baseline = ${revenue:,.2f}.",
+        "evidence": f"Reference {channel} revenue baseline = ${revenue:,.2f}.{evidence_suffix}",
     }
 
 
@@ -240,10 +270,10 @@ def score_demand_consistency(packet: dict[str, Any], channel: str) -> dict[str, 
     source = reference_family_metrics_source(packet)
     evidence_type = "direct"
     source_note = ""
-    if source and source != "POSTGRES_MCP":
+    if source and source != "postgres_mcp":
         evidence_type = "proxy"
         score = min(score, 8)
-        source_note = f" Source={source.lower()}."
+        source_note = f" Source={source}."
 
     return {
         "status": "scored",
@@ -332,9 +362,9 @@ def score_sales_trend(packet: dict[str, Any], channel: str) -> dict[str, Any]:
     source = reference_family_metrics_source(packet)
     evidence_type = "direct"
     source_note = ""
-    if source and source != "POSTGRES_MCP":
+    if source and source != "postgres_mcp":
         evidence_type = "proxy"
-        source_note = f" Source={source.lower()}."
+        source_note = f" Source={source}."
 
     return {
         "status": "scored",
@@ -344,11 +374,19 @@ def score_sales_trend(packet: dict[str, Any], channel: str) -> dict[str, Any]:
     }
 
 
-def score_stackline_brand_count(packet: dict[str, Any], channel: str) -> dict[str, Any]:
+def score_stackline_brand_count(packet: dict[str, Any], channel: str, analysis_summary: dict[str, Any] | None = None) -> dict[str, Any]:
     context = lookup_channel_context(packet, channel)
     brand_count = parse_number(as_dict(as_dict(context.get("segment")).get("market_snapshot")).get("brand_count"))
+    evidence_type = "direct"
+    evidence = None
+
     if brand_count is None:
-        return {"status": "inactive_missing_source", "reason": "No segment brand-count snapshot is available for this channel."}
+        summary = analysis_summary or {}
+        brand_count = parse_number(summary.get("normalized_brand_count"))
+        if brand_count is None:
+            return {"status": "inactive_missing_source", "reason": "No segment brand-count snapshot is available for this channel."}
+        evidence_type = "proxy"
+        evidence = f"Normalized competitor-set brand count proxy = {int(brand_count)} for {channel}."
 
     if brand_count <= 2:
         score = 2
@@ -364,8 +402,8 @@ def score_stackline_brand_count(packet: dict[str, Any], channel: str) -> dict[st
     return {
         "status": "scored",
         "score": score,
-        "evidence_type": "direct",
-        "evidence": f"Stackline brand count = {int(brand_count)} for the {channel} segment snapshot.",
+        "evidence_type": evidence_type,
+        "evidence": evidence or f"Stackline brand count = {int(brand_count)} for the {channel} segment snapshot.",
     }
 
 
@@ -662,6 +700,7 @@ def evaluate_question(
     packet: dict[str, Any],
     pricing_analysis: dict[str, Any],
     spec_coverage: dict[str, Any],
+    analysis_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     if family_state_value not in question.get("family_states", []):
         return None
@@ -686,12 +725,13 @@ def evaluate_question(
         }
 
     strategy = STRATEGIES[strategy_name]
-    if strategy_name in {
+    if strategy_name == "stackline_brand_count":
+        result = strategy(packet, channel, analysis_summary)
+    elif strategy_name in {
         "reference_channel_revenue",
         "demand_consistency",
         "bulk_buyer_analysis",
         "sales_trend",
-        "stackline_brand_count",
         "stackline_total_traffic",
         "competitor_growth_proxy",
         "gmc_visibility_proxy",
@@ -837,6 +877,7 @@ def build_channel_gate_snapshot(
     packet: dict[str, Any],
     pricing_analysis: dict[str, Any],
     spec_coverage: dict[str, Any],
+    analysis_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     active_questions = []
     for question in rubric["questions"]:
@@ -848,6 +889,7 @@ def build_channel_gate_snapshot(
             packet=packet,
             pricing_analysis=pricing_analysis,
             spec_coverage=spec_coverage,
+            analysis_summary=analysis_summary,
         )
         if result is not None:
             active_questions.append(result)
@@ -884,6 +926,7 @@ def build_gate_readiness(
     pricing_analysis: dict[str, Any],
     spec_coverage: dict[str, Any],
     performance_estimation: dict[str, Any],
+    analysis_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     rubric = cached_rubric()
     family_state_value = family_state(packet)
@@ -900,6 +943,7 @@ def build_gate_readiness(
                     packet=packet,
                     pricing_analysis=pricing_analysis,
                     spec_coverage=spec_coverage,
+                    analysis_summary=analysis_summary,
                 )
             )
 
