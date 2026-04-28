@@ -20,6 +20,7 @@ from typing import Any
 
 DEFAULT_SYNC_ROOT = Path(r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research")
 DEFAULT_REPORTS_DIRNAME = "Research Reports"
+DEFAULT_GOALS_PATH = Path(r"C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\GOALS.md")
 
 
 def reports_root_from_env_or_default() -> Path:
@@ -28,6 +29,14 @@ def reports_root_from_env_or_default() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     return (DEFAULT_SYNC_ROOT / DEFAULT_REPORTS_DIRNAME).resolve()
+
+
+def goals_path_from_env_or_default() -> Path:
+    """Return the markdown file used for category-owner fallback lookup."""
+    override = os.getenv("PRD_CATEGORY_OWNER_GOALS_FILE")
+    if override:
+        return Path(override).expanduser().resolve()
+    return DEFAULT_GOALS_PATH.resolve()
 
 
 def combined_workbook_for_session(session_root: Path) -> Path:
@@ -68,6 +77,13 @@ def unique_nonempty_texts(values: list[Any]) -> list[str]:
     return result
 
 
+def normalized_label_key(value: str | None) -> str:
+    """Normalize loose category/subcategory labels for matching."""
+    text = (value or "").strip().casefold()
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return text
+
+
 def sanitize_filename_component(value: str | None, *, fallback: str) -> str:
     """Convert loose text into a filesystem-safe filename component."""
     text = (value or "").strip()
@@ -88,16 +104,83 @@ def resolve_component_label(values: list[str], *, empty_fallback: str, mixed_fal
     return sanitize_filename_component(unique_values[0], fallback=empty_fallback)
 
 
+def parse_goals_owner_map(goals_path: Path) -> dict[tuple[str, str | None], str]:
+    """Parse the owner/category/subcategory markdown mapping from GOALS.md."""
+    if not goals_path.exists():
+        return {}
+
+    owner_map: dict[tuple[str, str | None], str] = {}
+    current_owner: str | None = None
+    current_category: str | None = None
+
+    for raw_line in goals_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        normalized_line = raw_line.replace("\u00a0", " ").rstrip()
+        stripped_line = normalized_line.strip()
+        if not stripped_line:
+            continue
+
+        owner_match = re.match(r"^([A-Za-z][A-Za-z .'-]*):\s*$", stripped_line)
+        if owner_match:
+            current_owner = owner_match.group(1).strip()
+            current_category = None
+            continue
+
+        if not current_owner:
+            continue
+
+        bullet_match = re.match(r"^(\s*)- (.+?)\s*(?:\(.*\))?$", normalized_line)
+        if not bullet_match:
+            continue
+
+        indent = len(bullet_match.group(1) or "")
+        bullet_text = bullet_match.group(2).strip()
+        if indent >= 2 and current_category:
+            owner_map[
+                (
+                    normalized_label_key(current_category),
+                    normalized_label_key(bullet_text),
+                )
+            ] = current_owner
+            continue
+
+        current_category = bullet_text
+        owner_map[(normalized_label_key(current_category), None)] = current_owner
+
+    return owner_map
+
+
+def owner_from_goals_map(category: str | None, subcategory: str | None, owner_map: dict[tuple[str, str | None], str]) -> str | None:
+    """Resolve an owner from GOALS.md using category/subcategory fallback matching."""
+    category_key = normalized_label_key(category)
+    subcategory_key = normalized_label_key(subcategory)
+    if not category_key:
+        return None
+    if subcategory_key and (category_key, subcategory_key) in owner_map:
+        return owner_map[(category_key, subcategory_key)]
+    return owner_map.get((category_key, None))
+
+
 def session_publish_metadata(session_root: Path, combined_source: Path) -> dict[str, Any]:
     """Infer owner/category/date metadata for publish naming."""
     owners: list[str] = []
     categories: list[str] = []
+    subcategories: list[str] = []
+    owner_lookup_source = "packet_identity"
+    goals_owner_map = parse_goals_owner_map(goals_path_from_env_or_default())
 
     for packet_path in packet_paths_for_session(session_root):
         packet = read_json(packet_path)
         identity = packet.get("identity") or {}
-        owners.append(identity.get("category_owner") or identity.get("owner") or "")
-        categories.append(identity.get("category") or "")
+        category = identity.get("category") or ""
+        subcategory = identity.get("subcategory") or ""
+        owner = identity.get("category_owner") or identity.get("owner") or ""
+        if not owner:
+            owner = owner_from_goals_map(category, subcategory, goals_owner_map) or ""
+            if owner:
+                owner_lookup_source = "goals_markdown_fallback"
+        owners.append(owner)
+        categories.append(category)
+        subcategories.append(subcategory)
 
     run_date = datetime.fromtimestamp(combined_source.stat().st_mtime).strftime("%Y%m%d")
     owner_label = resolve_component_label(
@@ -117,6 +200,9 @@ def session_publish_metadata(session_root: Path, combined_source: Path) -> dict[
         "run_date": run_date,
         "owner_values": unique_nonempty_texts(owners),
         "category_values": unique_nonempty_texts(categories),
+        "subcategory_values": unique_nonempty_texts(subcategories),
+        "owner_lookup_source": owner_lookup_source,
+        "goals_path": str(goals_path_from_env_or_default()),
     }
 
 
