@@ -471,6 +471,7 @@ def spec_action_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
                 "Feature",
                 entry.get("label"),
                 entry.get("signal"),
+                entry.get("evidence_strength"),
                 entry.get("coverage_pct"),
                 entry.get("matched_count"),
                 entry.get("recommended_action"),
@@ -482,6 +483,7 @@ def spec_action_rows(spec_coverage: dict[str, Any]) -> list[list[Any]]:
                 "Certification",
                 entry.get("label"),
                 entry.get("signal"),
+                entry.get("evidence_strength"),
                 entry.get("coverage_pct"),
                 entry.get("matched_count"),
                 entry.get("recommended_action"),
@@ -813,7 +815,7 @@ def render_row_sheet(
         ws,
         row,
         "Section E - Feature / Certification Signals",
-        ["Type", "Label", "Signal", "Coverage %", "Matched", "Recommendation"],
+        ["Type", "Label", "Signal", "Evidence", "Coverage %", "Matched", "Recommendation"],
         spec_action_rows(spec_coverage),
     )
     row = write_table(

@@ -981,6 +981,9 @@ def build_highest_impact_vendor_requests(
     spec_coverage: dict[str, Any],
 ) -> list[dict[str, Any]]:
     requests: list[dict[str, Any]] = []
+    suppressed_feature_labels = {
+        "integrated led",
+    }
     suggested = as_dict(pricing_analysis.get("suggested_msrp_range"))
     margin_conflict = bool(suggested.get("margin_conflict"))
     min_margin_safe = parse_number(suggested.get("minimum_margin_safe_price"))
@@ -1017,22 +1020,42 @@ def build_highest_impact_vendor_requests(
             )
 
     for entry in as_list(spec_coverage.get("feature_coverage")):
+        label = (normalize_text(entry.get("label")) or "").strip().lower()
+        if label in suppressed_feature_labels:
+            continue
         signal = normalize_text(entry.get("signal"))
+        evidence_strength = normalize_text(entry.get("evidence_strength")) or "medium"
         if signal == "table_stakes":
+            if evidence_strength == "weak":
+                request = f"Validate whether {entry.get('label')} is truly table stakes before requiring it from the vendor."
+                reason = (
+                    f"{entry.get('label')} reads as table stakes in the current set, but the supporting evidence is still weak."
+                )
+                priority = "medium"
+            else:
+                request = f"Require the vendor to confirm true support for {entry.get('label')}."
+                reason = f"{entry.get('label')} appears in {entry.get('matched_count')} competitor listings and reads as table stakes."
+                priority = "high"
             requests.append(
                 {
-                    "priority": "high",
-                    "request": f"Require the vendor to confirm true support for {entry.get('label')}.",
-                    "reason": f"{entry.get('label')} appears in {entry.get('matched_count')} competitor listings and reads as table stakes.",
+                    "priority": priority,
+                    "request": request,
+                    "reason": reason,
                     "linked_metric": entry.get("label"),
                 }
             )
         elif signal == "competitive":
+            request = f"Keep {entry.get('label')} in scope if Sunco needs mainstream parity in this category."
+            reason = f"{entry.get('label')} shows up often enough to influence channel expectations."
+            priority = "medium"
+            if evidence_strength == "weak":
+                request = f"Treat {entry.get('label')} as provisional until source-page evidence confirms it belongs in the mainstream spec set."
+                reason = f"{entry.get('label')} may matter, but the current evidence is still weak."
             requests.append(
                 {
-                    "priority": "medium",
-                    "request": f"Keep {entry.get('label')} in scope if Sunco needs mainstream parity in this category.",
-                    "reason": f"{entry.get('label')} shows up often enough to influence channel expectations.",
+                    "priority": priority,
+                    "request": request,
+                    "reason": reason,
                     "linked_metric": entry.get("label"),
                 }
             )

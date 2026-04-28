@@ -270,24 +270,111 @@ def coverage_signal(coverage_pct: float) -> str:
     return "whitespace"
 
 
+def evidence_strength_label(rank: int) -> str:
+    """Map an evidence rank into a plain-language label."""
+    if rank >= 3:
+        return "strong"
+    if rank == 2:
+        return "medium"
+    if rank == 1:
+        return "weak"
+    return "none"
+
+
+def downgrade_evidence_strength(label: str) -> str:
+    """Downgrade an evidence label by one step."""
+    order = {"strong": 3, "medium": 2, "weak": 1, "none": 0}
+    return evidence_strength_label(max(order.get(label, 0) - 1, 0))
+
+
+def coverage_evidence_strength(
+    *,
+    matched_count: int,
+    matched_source_channel_count: int,
+    heuristic_match_count: int,
+    total_count: int,
+    total_source_channel_count: int,
+) -> str:
+    """Estimate how trustworthy a surfaced coverage signal is."""
+    if matched_count <= 0:
+        if total_count >= 12 and total_source_channel_count >= 3:
+            return "strong"
+        if total_count >= 6 and total_source_channel_count >= 2:
+            return "medium"
+        return "weak"
+
+    strength = "weak"
+    if matched_count >= 3 and matched_source_channel_count >= 2:
+        strength = "strong"
+    elif matched_count >= 2 or matched_source_channel_count >= 2:
+        strength = "medium"
+
+    if heuristic_match_count >= max(1, matched_count // 2):
+        strength = downgrade_evidence_strength(strength)
+    return strength
+
+
+def coverage_evidence_note(
+    *,
+    signal: str,
+    evidence_strength: str,
+    matched_source_channels: list[str],
+    heuristic_match_count: int,
+    matched_count: int,
+    total_source_channel_count: int,
+) -> str:
+    """Describe the quality of one feature/certification coverage signal."""
+    if matched_count <= 0:
+        if evidence_strength == "strong":
+            return f"Absence observed across {total_source_channel_count} collected channel groups."
+        if evidence_strength == "medium":
+            return f"Absence observed, but only across {total_source_channel_count} collected channel groups."
+        return "Absence is provisional because the collected channel breadth is still limited."
+
+    channel_text = ", ".join(matched_source_channels) if matched_source_channels else "one channel"
+    if heuristic_match_count > 0:
+        return (
+            f"Matched across {channel_text}; {heuristic_match_count} of {matched_count} matches were inferred heuristically."
+        )
+    if signal == "table_stakes":
+        return f"Matched explicitly across {channel_text}."
+    return f"Matched across {channel_text}."
+
+
 def coverage_recommendation(
     label: str,
     matched_count: int,
     total_count: int,
     signal: str,
     kind: str,
+    evidence_strength: str,
 ) -> str:
     """Create actionable guidance for a feature or certification ask."""
     coverage_text = f"{matched_count} of {total_count} competitors"
     if signal == "table_stakes":
-        return f"{label} is table stakes: {coverage_text} include it, so Sunco should keep it to stay at parity."
+        base = f"{label} is table stakes: {coverage_text} include it, so Sunco should keep it to stay at parity."
+        if evidence_strength == "weak":
+            return base + " Evidence is still thin, so verify it on source pages before locking it in."
+        return base
     if signal == "competitive":
-        return f"{label} is common but not universal: {coverage_text} include it, so include it if this concept needs mainstream channel parity."
+        base = f"{label} is common but not universal: {coverage_text} include it, so include it if this concept needs mainstream channel parity."
+        if evidence_strength == "weak":
+            return base + " Treat this as provisional until more direct source evidence confirms it."
+        return base
     if signal == "differentiator":
-        return f"{label} is a differentiator: only {coverage_text} include it, so keep it only if Sunco wants a premium feature claim."
+        base = f"{label} is a differentiator: only {coverage_text} include it, so keep it only if Sunco wants a premium feature claim."
+        if evidence_strength == "weak":
+            return base + " The current evidence is thin, so validate whether this is a real differentiator or just under-collected."
+        return base
     if kind == "certification":
-        return f"No normalized competitors currently surface {label}; validate whether that certification is a real channel requirement before adding cost."
-    return f"No normalized competitors currently surface {label}; validate that it represents a real customer need before locking in added complexity."
+        base = f"No normalized competitors currently surface {label}; validate whether that certification is a real channel requirement before adding cost."
+        if evidence_strength == "weak":
+            return base + " Current collection breadth is limited, so treat the absence as provisional."
+        return base
+    base = f"No normalized competitors currently surface {label}; validate that it represents a real customer need before locking in added complexity."
+    if evidence_strength == "weak":
+        return base + " Current collection breadth is limited, so treat the absence as provisional."
+    return base
 
 
 def build_numeric_guidance_entry(
@@ -684,47 +771,117 @@ def build_pricing_analysis(packet: dict[str, Any], items: list[dict[str, Any]]) 
 
 def feature_matches(item: dict[str, Any], label: str) -> bool:
     """Apply lightweight feature matching heuristics."""
+    return feature_match_detail(item, label).get("matched", False)
+
+
+def feature_match_detail(item: dict[str, Any], label: str) -> dict[str, Any]:
+    """Return both whether a feature matches and how it matched."""
     lowered = normalized_compare_text(label)
     title = normalized_compare_text(item.get("product_title"))
     features = normalized_compare_text(" ".join(item.get("features", [])))
     dimming_type = normalized_compare_text(item.get("dimming_type"))
+    haystack = f"{title} {features}"
+
+    def explicit() -> dict[str, Any]:
+        return {"matched": True, "basis": "explicit"}
+
+    def heuristic() -> dict[str, Any]:
+        return {"matched": True, "basis": "heuristic"}
 
     if "0-10v" in lowered:
-        return "0 10v" in title or "0 10v" in features or dimming_type == "0 10v"
-    if "dimm" in lowered:
-        return item.get("dimmable") is True or "dimmable" in title or "dimmable" in features
+        if "0 10v" in title or "0 10v" in features or dimming_type == "0 10v":
+            return explicit()
+        return {"matched": False}
     if "motion sensor" in lowered:
-        return "motion sensor" in title or "motion sensor" in features or "sensor receptacle" in title
+        if "motion sensor" in title or "motion sensor" in features:
+            return explicit()
+        if "sensor receptacle" in title or "sensor receptacle" in features or "sensor ready" in haystack:
+            return heuristic()
+        return {"matched": False}
     if "auto dim" in lowered or "daylight" in lowered:
-        return "auto dim" in title or "daylight" in title or "auto dim" in features
-    if "emergency battery backup" in lowered:
-        haystack = f"{title} {features}"
-        return "battery backup" in haystack or "emergency battery" in haystack
-    if "90 minutes" in lowered and "runtime" in lowered:
-        haystack = f"{title} {features}"
-        return bool(re.search(r"\b90\b.*\bminute", haystack))
-    if "24 hours" in lowered and "charge time" in lowered:
-        haystack = f"{title} {features}"
-        return bool(re.search(r"\b24\b.*\bhour", haystack)) and (
-            "charge" in haystack or "recharge" in haystack
+        explicit_patterns = (
+            "auto dim",
+            "auto dimming",
+            "daylight harvesting",
+            "daylight sensor",
+            "daylight dimming",
+            "photocell",
+            "photosensor",
         )
+        if any(pattern in haystack for pattern in explicit_patterns):
+            return explicit()
+        return {"matched": False}
+    if "dimm" in lowered:
+        if item.get("dimmable") is True or "dimmable" in title or "dimmable" in features or "dims to" in haystack:
+            return explicit()
+        return {"matched": False}
+    if "emergency battery backup" in lowered:
+        if "battery backup" in haystack or "emergency battery" in haystack or "em backup" in haystack:
+            return explicit()
+        return {"matched": False}
+    if "90 minutes" in lowered and "runtime" in lowered:
+        if bool(re.search(r"\b90\b.*\bminute", haystack)):
+            return explicit()
+        return {"matched": False}
+    if "24 hours" in lowered and "charge time" in lowered:
+        if bool(re.search(r"\b24\b.*\bhour", haystack)) and (
+            "charge" in haystack or "recharge" in haystack
+        ):
+            return explicit()
+        return {"matched": False}
     if "switching time" in lowered:
-        haystack = f"{title} {features}"
-        return "switching time" in haystack or "instant on" in haystack
+        if "switching time" in haystack or "instant on" in haystack:
+            return explicit()
+        return {"matched": False}
+    if "integrated led" in lowered:
+        explicit_patterns = (
+            "integrated led",
+            "led panel",
+            "led flat panel",
+            "led troffer",
+            "led fixture",
+            "led ceiling light",
+            "panel light",
+        )
+        if any(pattern in haystack for pattern in explicit_patterns):
+            return explicit()
+        return {"matched": False}
     if "selectable wattage" in lowered:
-        return "/" in (normalize_text(item.get("wattage")) or "") or "selectable wattage" in features
+        if (
+            "/" in (normalize_text(item.get("wattage")) or "")
+            or "selectable wattage" in features
+            or "adjustable lumen output" in haystack
+            or "lumens selectable" in haystack
+            or "wattage and cct selectable" in haystack
+        ):
+            return explicit()
+        return {"matched": False}
     if "selectable cct" in lowered:
-        return "/" in (normalize_text(item.get("cct")) or "") or "selectable cct" in features
+        if (
+            "/" in (normalize_text(item.get("cct")) or "")
+            or "selectable cct" in features
+            or "3 color selectable" in haystack
+            or "switchable white" in haystack
+            or "color select" in haystack
+            or "adjustable cct" in haystack
+        ):
+            return explicit()
+        return {"matched": False}
     if lowered in {"dry", "damp", "wet"}:
-        return lowered in title or lowered in features or f"{lowered} rated" in features
+        if lowered in title or lowered in features or f"{lowered} rated" in features:
+            return explicit()
+        return {"matched": False}
     if lowered.startswith("ip"):
-        return lowered in title or lowered in features
+        if lowered in title or lowered in features:
+            return explicit()
+        return {"matched": False}
 
     tokens = [token for token in re.split(r"[^a-z0-9]+", lowered) if len(token) > 2]
     if not tokens:
-        return False
-    haystack = f"{title} {features}"
-    return all(token in haystack for token in tokens)
+        return {"matched": False}
+    if all(token in haystack for token in tokens):
+        return heuristic()
+    return {"matched": False}
 
 
 def certification_matches(item: dict[str, Any], label: str) -> bool:
@@ -758,11 +915,36 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
         feature_watchlist.append(text)
     feature_watchlist = unique_preserve_order(feature_watchlist)
 
+    total_source_channels = len(
+        {
+            normalize_text(item.get("source_channel"))
+            for item in items
+            if normalize_text(item.get("source_channel"))
+        }
+    )
+
     feature_coverage = []
     for label in feature_watchlist:
-        matched_count = sum(1 for item in items if feature_matches(item, label))
+        match_details = [feature_match_detail(item, label) for item in items]
+        matched_items = [item for item, detail in zip(items, match_details) if detail.get("matched")]
+        matched_count = len(matched_items)
         coverage_pct = round((matched_count / len(items)) * 100, 2) if items else 0
         signal = coverage_signal(coverage_pct)
+        matched_source_channels = unique_preserve_order(
+            [
+                normalize_text(item.get("source_channel")) or ""
+                for item in matched_items
+                if normalize_text(item.get("source_channel"))
+            ]
+        )
+        heuristic_match_count = sum(1 for detail in match_details if detail.get("basis") == "heuristic")
+        evidence_strength = coverage_evidence_strength(
+            matched_count=matched_count,
+            matched_source_channel_count=len(matched_source_channels),
+            heuristic_match_count=heuristic_match_count,
+            total_count=len(items),
+            total_source_channel_count=total_source_channels,
+        )
         feature_coverage.append(
             compact_dict(
                 {
@@ -770,12 +952,23 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
                     "matched_count": matched_count,
                     "coverage_pct": coverage_pct,
                     "signal": signal,
+                    "matched_source_channels": matched_source_channels,
+                    "evidence_strength": evidence_strength,
+                    "evidence_note": coverage_evidence_note(
+                        signal=signal,
+                        evidence_strength=evidence_strength,
+                        matched_source_channels=matched_source_channels,
+                        heuristic_match_count=heuristic_match_count,
+                        matched_count=matched_count,
+                        total_source_channel_count=total_source_channels,
+                    ),
                     "recommended_action": coverage_recommendation(
                         label,
                         matched_count,
                         len(items),
                         signal,
                         "feature",
+                        evidence_strength,
                     ),
                 }
             )
@@ -786,6 +979,20 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
         matched_count = sum(1 for item in items if certification_matches(item, label))
         coverage_pct = round((matched_count / len(items)) * 100, 2) if items else 0
         signal = coverage_signal(coverage_pct)
+        matched_source_channels = unique_preserve_order(
+            [
+                normalize_text(item.get("source_channel")) or ""
+                for item in items
+                if certification_matches(item, label) and normalize_text(item.get("source_channel"))
+            ]
+        )
+        evidence_strength = coverage_evidence_strength(
+            matched_count=matched_count,
+            matched_source_channel_count=len(matched_source_channels),
+            heuristic_match_count=0,
+            total_count=len(items),
+            total_source_channel_count=total_source_channels,
+        )
         certification_coverage.append(
             compact_dict(
                 {
@@ -793,12 +1000,23 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
                     "matched_count": matched_count,
                     "coverage_pct": coverage_pct,
                     "signal": signal,
+                    "matched_source_channels": matched_source_channels,
+                    "evidence_strength": evidence_strength,
+                    "evidence_note": coverage_evidence_note(
+                        signal=signal,
+                        evidence_strength=evidence_strength,
+                        matched_source_channels=matched_source_channels,
+                        heuristic_match_count=0,
+                        matched_count=matched_count,
+                        total_source_channel_count=total_source_channels,
+                    ),
                     "recommended_action": coverage_recommendation(
                         label,
                         matched_count,
                         len(items),
                         signal,
                         "certification",
+                        evidence_strength,
                     ),
                 }
             )
@@ -1187,10 +1405,16 @@ def find_signal_entry(entries: list[dict[str, Any]], target_label: str) -> dict[
 def feature_signal_reason(entry: dict[str, Any], driver_type: str) -> str:
     """Explain why a feature/certification driver matters for this ideation."""
     signal = normalize_text(entry.get("signal")) or "competitive"
+    evidence_strength = normalize_text(entry.get("evidence_strength"))
     coverage_pct = parse_number(entry.get("coverage_pct"))
     label = normalize_text(entry.get("label")) or driver_type.title()
     if coverage_pct is None:
         return f"{label} is being tracked as a {signal.replace('_', ' ')} signal."
+    if evidence_strength:
+        return (
+            f"{label} reads as {signal.replace('_', ' ')} at {coverage_pct:.2f}% competitor coverage "
+            f"with {evidence_strength} supporting evidence."
+        )
     return f"{label} reads as {signal.replace('_', ' ')} at {coverage_pct:.2f}% competitor coverage."
 
 
