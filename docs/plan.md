@@ -303,6 +303,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 **Goal:** Produce final Excel workbook and create the skill trigger
 - [x] `6A` Report artifacts: generate row-level `.xlsx` research report files from completed analysis artifacts
 - [x] Build a combined workbook with a summary sheet plus one sheet per completed ideation
+- [x] Add a top-level local orchestrator (`tools/research_orchestrator.py`) that wraps prepare / refresh / finalize / status workflow phases
 - [ ] Generate .xlsx with one sheet per ideation (sections A-F)
 - [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) — PM can swap before generating
 - [ ] Style: brand colors, headers, conditional formatting
