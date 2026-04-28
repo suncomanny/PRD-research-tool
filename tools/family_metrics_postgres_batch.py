@@ -18,12 +18,9 @@ from typing import Any
 from openpyxl import load_workbook
 
 from sku_lookup import strip_pack_suffix
-from template_parser import SHEET_NAME, normalize_header
+from template_parser import DEFAULT_WORKBOOK, SHEET_NAME, normalize_header
 
 
-TOOLS_DIR = Path(__file__).resolve().parent
-REPO_ROOT = TOOLS_DIR.parent
-DEFAULT_WORKBOOK = REPO_ROOT / "templates" / "PRD_Research_Template.xlsx"
 AMAZON_CHANNEL_ID = 11929
 SHOPIFY_CHANNEL_ID = 12585
 

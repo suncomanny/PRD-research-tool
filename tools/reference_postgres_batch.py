@@ -18,12 +18,8 @@ from typing import Any
 from openpyxl import load_workbook
 
 from sku_lookup import build_mcp_queries, default_sales_window, strip_pack_suffix
-from template_parser import SHEET_NAME, normalize_header
+from template_parser import DEFAULT_WORKBOOK, SHEET_NAME, normalize_header
 
-
-TOOLS_DIR = Path(__file__).resolve().parent
-REPO_ROOT = TOOLS_DIR.parent
-DEFAULT_WORKBOOK = REPO_ROOT / "templates" / "PRD_Research_Template.xlsx"
 
 
 def utc_now() -> str:

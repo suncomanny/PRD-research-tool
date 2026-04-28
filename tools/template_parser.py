@@ -27,7 +27,15 @@ from sku_lookup import build_mcp_queries, lookup_from_csv, merge_postgres_data
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
-DEFAULT_WORKBOOK = REPO_ROOT / "templates" / "PRD_Research_Template.xlsx"
+SHARED_TEMPLATE_ROOT = Path(
+    r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates"
+)
+REPO_TEMPLATE_ROOT = REPO_ROOT / "templates"
+DEFAULT_WORKBOOK = (
+    SHARED_TEMPLATE_ROOT / "PRD_Research_Template.xlsx"
+    if (SHARED_TEMPLATE_ROOT / "PRD_Research_Template.xlsx").exists()
+    else REPO_TEMPLATE_ROOT / "PRD_Research_Template.xlsx"
+)
 SHEET_NAME = "Ideations"
 REQUIRED_IDENTITY_FIELDS = {
     "category",

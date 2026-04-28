@@ -36,9 +36,8 @@ from research_session_manager import (
     validate_raw_artifacts,
 )
 from sharepoint_publish import publish_session_reports
+from template_parser import DEFAULT_WORKBOOK
 
-
-DEFAULT_WORKBOOK = Path(__file__).resolve().parents[1] / "templates" / "PRD_Research_Template.xlsx"
 
 
 def parse_rows_argument(value: str | None) -> list[int] | None:

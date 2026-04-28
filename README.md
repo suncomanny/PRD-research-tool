@@ -10,6 +10,14 @@ Category-agnostic ideation template plus competitive research workflow for Sunco
 4. Tool normalizes, analyzes, and reports each ideation.
 5. PM reviews the workbook and uses the findings to refine the ideation / PRD.
 
+## Canonical Template Location
+
+The preferred filled template path is the shared-drive copy:
+
+- `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx`
+
+If that file exists, the CLI defaults now prefer it automatically over the repo-local template copy.
+
 ## Main Entry Point
 
 Use the orchestrator for the normal workflow:
