@@ -35,6 +35,7 @@ from research_session_manager import (
     update_session,
     validate_raw_artifacts,
 )
+from sharepoint_publish import publish_session_reports
 
 
 DEFAULT_WORKBOOK = Path(__file__).resolve().parents[1] / "templates" / "PRD_Research_Template.xlsx"
@@ -197,6 +198,11 @@ def finalize_session(
     run_price_enrichment: bool,
     build_combined: bool,
     fail_on_invalid_raw: bool,
+    publish_sharepoint: bool,
+    publish_destination_root: str | None,
+    publish_include_row_reports: bool,
+    publish_combined_name: str | None,
+    publish_row_reports_subdir: str | None,
 ) -> dict[str, Any]:
     """Validate raw artifacts and push them through the downstream pipeline."""
     validation = validate_raw_artifacts(session_root, rows=rows)
@@ -220,6 +226,17 @@ def finalize_session(
     combined_result = build_reports(session_root, combined=True) if build_combined else None
     update_result = update_session(session_root)
     status_result = session_status(session_root, rows=rows, limit=5)
+    publish_result = (
+        publish_session_reports(
+            session_root,
+            destination_root=publish_destination_root,
+            include_row_reports=publish_include_row_reports,
+            combined_name=publish_combined_name,
+            row_reports_subdir=publish_row_reports_subdir,
+        )
+        if publish_sharepoint
+        else None
+    )
 
     return {
         "session_root": str(Path(session_root).resolve()),
@@ -231,6 +248,7 @@ def finalize_session(
         "combined": combined_result,
         "update": update_result,
         "status": status_result,
+        "sharepoint_publish": publish_result,
     }
 
 
@@ -324,6 +342,11 @@ def command_refresh(args: argparse.Namespace) -> dict[str, Any]:
         run_price_enrichment=not args.skip_price_enrichment,
         build_combined=not args.skip_combined,
         fail_on_invalid_raw=not args.allow_invalid_raw,
+        publish_sharepoint=args.publish_sharepoint,
+        publish_destination_root=args.publish_destination_root,
+        publish_include_row_reports=args.publish_include_row_reports,
+        publish_combined_name=args.publish_combined_name,
+        publish_row_reports_subdir=args.publish_row_reports_subdir,
     )
 
     return {
@@ -342,8 +365,25 @@ def command_finalize(args: argparse.Namespace) -> dict[str, Any]:
         run_price_enrichment=not args.skip_price_enrichment,
         build_combined=not args.skip_combined,
         fail_on_invalid_raw=not args.allow_invalid_raw,
+        publish_sharepoint=args.publish_sharepoint,
+        publish_destination_root=args.publish_destination_root,
+        publish_include_row_reports=args.publish_include_row_reports,
+        publish_combined_name=args.publish_combined_name,
+        publish_row_reports_subdir=args.publish_row_reports_subdir,
     )
     return {"mode": "finalize", **result}
+
+
+def command_publish(args: argparse.Namespace) -> dict[str, Any]:
+    """Publish completed report artifacts into the synced SharePoint folder."""
+    result = publish_session_reports(
+        args.session_root,
+        destination_root=args.destination_root,
+        include_row_reports=args.include_row_reports,
+        combined_name=args.combined_name,
+        row_reports_subdir=args.row_reports_subdir,
+    )
+    return {"mode": "publish", **result}
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
@@ -421,6 +461,11 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--skip-price-enrichment", action="store_true", help="Skip the post-collection price enrichment pass.")
     refresh.add_argument("--skip-combined", action="store_true", help="Skip rebuilding the combined workbook.")
     refresh.add_argument("--allow-invalid-raw", action="store_true", help="Continue even if raw validation still reports invalid artifacts.")
+    refresh.add_argument("--publish-sharepoint", action="store_true", help="Publish the completed workbook into the synced SharePoint reports folder after refresh.")
+    refresh.add_argument("--publish-destination-root", default=None, help="Override the synced SharePoint reports folder used when publishing.")
+    refresh.add_argument("--publish-include-row-reports", action="store_true", help="Also publish row-level reports when SharePoint publishing is enabled.")
+    refresh.add_argument("--publish-combined-name", default=None, help="Optional filename override for the published combined workbook.")
+    refresh.add_argument("--publish-row-reports-subdir", default=None, help="Optional subfolder name for published row-level reports.")
 
     finalize = subparsers.add_parser(
         "finalize",
@@ -431,6 +476,21 @@ def build_parser() -> argparse.ArgumentParser:
     finalize.add_argument("--skip-price-enrichment", action="store_true", help="Skip the post-collection price enrichment pass.")
     finalize.add_argument("--skip-combined", action="store_true", help="Skip rebuilding the combined workbook.")
     finalize.add_argument("--allow-invalid-raw", action="store_true", help="Continue even if raw validation still reports invalid artifacts.")
+    finalize.add_argument("--publish-sharepoint", action="store_true", help="Publish the completed workbook into the synced SharePoint reports folder after finalize.")
+    finalize.add_argument("--publish-destination-root", default=None, help="Override the synced SharePoint reports folder used when publishing.")
+    finalize.add_argument("--publish-include-row-reports", action="store_true", help="Also publish row-level reports when SharePoint publishing is enabled.")
+    finalize.add_argument("--publish-combined-name", default=None, help="Optional filename override for the published combined workbook.")
+    finalize.add_argument("--publish-row-reports-subdir", default=None, help="Optional subfolder name for published row-level reports.")
+
+    publish = subparsers.add_parser(
+        "publish",
+        help="Copy completed report artifacts into the locally synced SharePoint reports folder.",
+    )
+    publish.add_argument("session_root", help="Path to an initialized research session.")
+    publish.add_argument("--destination-root", default=None, help="Override the synced SharePoint reports folder.")
+    publish.add_argument("--include-row-reports", action="store_true", help="Also copy the row-level report workbooks into a session subfolder.")
+    publish.add_argument("--combined-name", default=None, help="Optional filename override for the published combined workbook.")
+    publish.add_argument("--row-reports-subdir", default=None, help="Optional subfolder name for published row-level reports.")
 
     status = subparsers.add_parser(
         "status",
@@ -454,6 +514,8 @@ def main() -> None:
         result = command_refresh(args)
     elif args.command == "finalize":
         result = command_finalize(args)
+    elif args.command == "publish":
+        result = command_publish(args)
     else:
         result = command_status(args)
 

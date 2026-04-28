@@ -307,6 +307,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] Generate .xlsx with one sheet per ideation (sections A-F)
 - [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) — PM can swap before generating
 - [ ] Style: brand colors, headers, conditional formatting
+- [x] Publish completed reports into the locally synced SharePoint `PRD Research\Research Reports\` folder
 - [ ] Upload to SharePoint via Graph API
 - [ ] Create SKILL.md definition (matching PRD Generator pattern)
 - [ ] Test end-to-end with real ideations

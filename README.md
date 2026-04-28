@@ -18,6 +18,7 @@ Use the orchestrator for the normal workflow:
 cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\research_orchestrator.py prepare "C:\path\to\workbook.xlsx" --session-name my_session --output-root "C:\path\to\output\research_sessions"
 cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\research_orchestrator.py finalize "C:\path\to\output\research_sessions\my_session"
 cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\research_orchestrator.py refresh "C:\path\to\output\research_sessions\my_session" --postgres-json "C:\path\to\reference_postgres_payload_template.json" --family-metrics-json "C:\path\to\family_metrics_payload_template.json"
+cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\research_orchestrator.py publish "C:\path\to\output\research_sessions\my_session"
 ```
 
 ## Orchestrator Modes
@@ -34,6 +35,9 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\researc
   - runs normalize, price enrichment, analysis, row reports, combined workbook, and manifest update
 - `status`
   - shows session summary plus next raw collection tasks
+- `publish`
+  - copies the combined workbook into the locally synced SharePoint reports folder
+  - can optionally also copy the row-level reports into a session subfolder
 
 ## Building Blocks
 
@@ -50,3 +54,4 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\researc
 - Stackline is expected by default, but the workflow degrades gracefully when it is missing.
 - Some reference SKUs may have sparse history; this lowers evidence confidence but does not block the batch.
 - SharePoint download/upload automation is still a separate future step.
+- SharePoint output publishing is currently implemented via the locally synced folder at `Product - Manny Tools\PRD Research\Research Reports`; Graph upload can be layered in later if needed.
