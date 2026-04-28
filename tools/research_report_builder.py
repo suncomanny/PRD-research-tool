@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -26,6 +28,7 @@ ACCENT_FILL = PatternFill(fill_type="solid", fgColor="EAF2F8")
 HEADER_FONT = Font(color="FFFFFF", bold=True, size=12)
 SUBHEADER_FONT = Font(bold=True)
 TITLE_FONT = Font(bold=True, size=15)
+HYPERLINK_FONT = Font(color="0563C1", underline="single")
 WRAP_ALIGNMENT = Alignment(vertical="top", wrap_text=True)
 DEFAULT_COLUMN_WIDTHS = {
     "A": 22,
@@ -38,10 +41,19 @@ DEFAULT_COLUMN_WIDTHS = {
     "H": 24,
     "I": 18,
     "J": 36,
+    "K": 14,
 }
 ALTERNATE_ROW_FILL = PatternFill(fill_type="solid", fgColor="F7FBFF")
 AMAZON_CHANNELS = {"amazon"}
 BM_DIRECT_CHANNELS = {"home_depot", "walmart", "lowes", "brand_site", "stackline_seed"}
+CHANNEL_DISPLAY_NAMES = {
+    "amazon": "Amazon",
+    "home_depot": "Home Depot",
+    "walmart": "Walmart",
+    "lowes": "Lowe's",
+    "brand_site": "Brand Site",
+    "stackline_seed": "Stackline",
+}
 
 
 def normalize_text(value: Any) -> str:
@@ -92,13 +104,13 @@ def safe_sheet_title(base: str, used: set[str]) -> str:
     return candidate
 
 
-def section_header(ws, row: int, title: str) -> int:
+def section_header(ws, row: int, title: str, end_column: int = 10) -> int:
     """Write a section header row and return the next row index."""
     ws.cell(row=row, column=1, value=title)
     ws.cell(row=row, column=1).fill = HEADER_FILL
     ws.cell(row=row, column=1).font = HEADER_FONT
     ws.cell(row=row, column=1).alignment = WRAP_ALIGNMENT
-    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=10)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=end_column)
     return row + 1
 
 
@@ -149,7 +161,7 @@ def write_list_section(ws, row: int, title: str, values: list[str]) -> int:
 
 def write_table(ws, row: int, title: str, headers: list[str], rows: list[list[Any]]) -> int:
     """Write a basic table and return the next row index."""
-    row = section_header(ws, row, title)
+    row = section_header(ws, row, title, end_column=max(10, len(headers)))
     for col_index, header in enumerate(headers, start=1):
         cell = ws.cell(row=row, column=col_index, value=header)
         cell.font = SUBHEADER_FONT
@@ -164,12 +176,114 @@ def write_table(ws, row: int, title: str, headers: list[str], rows: list[list[An
 
     for row_offset, values in enumerate(rows):
         for col_index, value in enumerate(values, start=1):
-            ws.cell(row=row, column=col_index, value=normalize_text(value))
-            ws.cell(row=row, column=col_index).alignment = WRAP_ALIGNMENT
+            cell = ws.cell(row=row, column=col_index)
+            apply_table_cell(cell, value)
+            cell.alignment = WRAP_ALIGNMENT
             if row_offset % 2 == 1:
-                ws.cell(row=row, column=col_index).fill = ALTERNATE_ROW_FILL
+                cell.fill = ALTERNATE_ROW_FILL
         row += 1
     return row + 1
+
+
+def apply_table_cell(cell, value: Any) -> None:
+    """Write a table cell, optionally attaching a hyperlink."""
+    hyperlink = None
+    text_value = value
+    if isinstance(value, dict):
+        text_value = value.get("value")
+        hyperlink = value.get("hyperlink")
+
+    cell.value = normalize_text(text_value)
+    if hyperlink:
+        cell.hyperlink = hyperlink
+        cell.font = HYPERLINK_FONT
+
+
+def optional_text(value: Any) -> str | None:
+    """Return a stripped string or None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def looks_like_amazon_asin(value: str | None) -> bool:
+    """Return whether a value looks like an Amazon ASIN."""
+    return bool(value and re.fullmatch(r"[A-Z0-9]{10}", value.upper()))
+
+
+def source_channel_label(item: dict[str, Any]) -> str:
+    """Render a human-friendly source channel label."""
+    channel = (optional_text(item.get("source_channel")) or "").lower()
+    return CHANNEL_DISPLAY_NAMES.get(channel, channel.replace("_", " ").title() or "Unknown")
+
+
+def listing_identifier_from_url(url: str | None, source_channel: str | None) -> str | None:
+    """Best-effort identifier fallback derived from the listing URL."""
+    if not url:
+        return None
+
+    channel = (source_channel or "").lower()
+    patterns = []
+    if channel == "amazon":
+        patterns = [(r"/dp/([A-Z0-9]{10})(?:[/?]|$)", "ASIN {match}")]
+    elif channel == "home_depot":
+        patterns = [(r"/p/(?:[^/]+/)?(\d+)(?:[/?]|$)", "Item {match}")]
+    elif channel == "walmart":
+        patterns = [(r"/ip/(?:[^/]+/)?(\d+)(?:[/?]|$)", "Item {match}")]
+    elif channel == "lowes":
+        patterns = [(r"/pd/[^/]+/(\d+)(?:[/?]|$)", "Item {match}")]
+
+    for pattern, template in patterns:
+        match = re.search(pattern, url, flags=re.IGNORECASE)
+        if match:
+            return template.format(match=match.group(1))
+    return None
+
+
+def listing_identifier(item: dict[str, Any]) -> str:
+    """Return the best channel-aware identifier label for one competitor listing."""
+    source_channel = (optional_text(item.get("source_channel")) or "").lower()
+    sku = optional_text(item.get("sku"))
+    model_number = optional_text(item.get("model_number"))
+    url = optional_text(item.get("url"))
+
+    if source_channel == "amazon":
+        asin = sku if looks_like_amazon_asin(sku) else None
+        if not asin and looks_like_amazon_asin(model_number):
+            asin = model_number
+        if not asin and url:
+            derived = listing_identifier_from_url(url, source_channel)
+            if derived and derived.startswith("ASIN "):
+                asin = derived.replace("ASIN ", "", 1)
+        if asin:
+            return f"ASIN {asin}"
+        if model_number:
+            return f"Model {model_number}"
+
+    if model_number:
+        return f"Model {model_number}"
+
+    if sku:
+        if source_channel == "brand_site":
+            return f"Part {sku}"
+        if source_channel in {"home_depot", "walmart", "lowes"}:
+            return f"Item {sku}"
+        return f"SKU {sku}"
+
+    derived = listing_identifier_from_url(url, source_channel)
+    return derived or ""
+
+
+def listing_link_cell(item: dict[str, Any]) -> dict[str, str] | str:
+    """Return a hyperlink cell payload for a competitor source listing."""
+    url = optional_text(item.get("url"))
+    if not url or url.startswith("stackline://"):
+        return ""
+    return {
+        "value": source_channel_label(item),
+        "hyperlink": url,
+    }
 
 
 def sort_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -201,12 +315,14 @@ def candidate_rows(
             [
                 item.get("brand"),
                 item.get("product_title"),
-                item.get("source_channel"),
+                listing_identifier(item),
+                source_channel_label(item),
                 item.get("price"),
                 item.get("wattage"),
                 item.get("lumens"),
                 item.get("cct"),
                 item.get("cri"),
+                listing_link_cell(item),
                 item.get("match_confidence"),
             ]
         )
@@ -645,7 +761,7 @@ def render_row_sheet(
         ws,
         row,
         "Section B - Amazon Competitors",
-        ["Brand", "Product", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Confidence"],
+        ["Brand", "Product", "Identifier", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Source Link", "Confidence"],
         candidate_rows(as_list(normalized.get("items")), AMAZON_CHANNELS, limit=10),
     )
 
@@ -653,7 +769,7 @@ def render_row_sheet(
         ws,
         row,
         "Section C - Brick-and-Mortar / Direct Competitors",
-        ["Brand", "Product", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Confidence"],
+        ["Brand", "Product", "Identifier", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Source Link", "Confidence"],
         candidate_rows(as_list(normalized.get("items")), BM_DIRECT_CHANNELS, limit=12),
     )
 
