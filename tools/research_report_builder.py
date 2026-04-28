@@ -584,6 +584,7 @@ def render_row_sheet(
         ws,
         row,
         [
+            ("Category Owner", identity.get("category_owner")),
             ("Category", identity.get("category")),
             ("Subcategory", identity.get("subcategory")),
             ("Strategy", identity.get("strategy")),
@@ -815,7 +816,7 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
     ws.title = "Summary"
     ws.cell(row=1, column=1, value="Completed Research Rows")
     ws.cell(row=1, column=1).font = TITLE_FONT
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=8)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
     key_value_rows(
         ws,
         3,
@@ -829,11 +830,12 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
         ws,
         6,
         "Completed Rows",
-        ["Row", "Ideation", "Category", "Outlook", "Confidence", "Amazon G2", "Amazon Evidence", "Report File"],
+        ["Row", "Ideation", "Category Owner", "Category", "Outlook", "Confidence", "Amazon G2", "Amazon Evidence", "Report File"],
         [
             [
                 row_number,
                 as_dict(packet.get("identity")).get("ideation_name"),
+                as_dict(packet.get("identity")).get("category_owner"),
                 as_dict(packet.get("identity")).get("category"),
                 as_dict(analysis.get("performance_estimation")).get("launch_outlook"),
                 as_dict(analysis.get("performance_estimation")).get("confidence"),

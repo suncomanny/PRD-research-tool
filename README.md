@@ -38,6 +38,9 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\researc
 - `publish`
   - copies the combined workbook into the locally synced SharePoint reports folder
   - can optionally also copy the row-level reports into a session subfolder
+  - by default names the published combined workbook as `CategoryOwner_Category_YYYYMMDD.xlsx`
+  - falls back to `UnknownOwner` when the workbook/session does not carry a category owner yet
+  - appends `_02`, `_03`, etc. instead of overwriting if multiple reports are published on the same day
 
 ## Building Blocks
 
