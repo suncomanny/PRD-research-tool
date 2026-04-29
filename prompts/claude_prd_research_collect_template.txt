@@ -1,0 +1,41 @@
+PRD Research Collect
+
+Do not edit repo code.
+Do not change templates.
+Do not rebuild reports.
+Do not publish anything.
+Do only the missing raw competitor collection work for this existing session.
+
+Use these exact paths:
+- Repo:
+  C:\Users\Sunco\Projects\PRD-research-tool
+- Session root:
+  {{SESSION_ROOT}}
+- Shared Stackline root:
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data
+- Shared template:
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx
+- Resource root:
+  C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\Resources
+- Shared reports root:
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Research Reports
+- Category owner mapping:
+  C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\GOALS.md
+
+Rules:
+1. Preflight those paths first. If any required path is inaccessible, stop immediately and report only the missing path(s).
+2. Read the session manifest/status and identify pending raw collection tasks only.
+3. Complete only the pending raw artifacts:
+   - amazon
+   - brick_and_mortar
+   - brand_sites
+4. Write artifacts to the exact expected output files.
+5. Do not overwrite valid completed raw artifacts.
+6. Keep going until there are no pending collection tasks or a real blocker prevents continuation.
+7. Do not run normalization, analysis, report building, or publishing.
+
+At the end, reply with only:
+- session path
+- collection complete or blocked
+- blocked rows/channels if any
+- a short plain-English summary

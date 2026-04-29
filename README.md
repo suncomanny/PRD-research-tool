@@ -29,6 +29,18 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\researc
 cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\research_orchestrator.py publish "C:\path\to\output\research_sessions\my_session"
 ```
 
+## Operator Workflow
+
+For the current low-token user -> Codex -> Claude -> Codex flow, see:
+
+- [docs/operator_workflow.md](docs/operator_workflow.md)
+
+To generate the exact Claude collection prompt for an existing session:
+
+```powershell
+cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\render_claude_collect_prompt.py "C:\path\to\output\research_sessions\my_session"
+```
+
 ## Orchestrator Modes
 
 - `prepare`
