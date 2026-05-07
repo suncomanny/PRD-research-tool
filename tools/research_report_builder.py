@@ -45,7 +45,7 @@ DEFAULT_COLUMN_WIDTHS = {
 }
 ALTERNATE_ROW_FILL = PatternFill(fill_type="solid", fgColor="F7FBFF")
 AMAZON_CHANNELS = {"amazon"}
-BM_DIRECT_CHANNELS = {"home_depot", "walmart", "lowes", "brand_site", "stackline_seed"}
+BM_DIRECT_CHANNELS = {"home_depot", "walmart", "lowes", "brand_site"}
 CHANNEL_DISPLAY_NAMES = {
     "amazon": "Amazon",
     "home_depot": "Home Depot",
@@ -54,6 +54,49 @@ CHANNEL_DISPLAY_NAMES = {
     "brand_site": "Brand Site",
     "stackline_seed": "Stackline",
 }
+
+SUMMARY_METRIC_GUIDE_ROWS = [
+    [
+        "Outlook",
+        "Directional recommendation for the ideation in its current configuration, such as favorable, mixed, or cautious.",
+        "Given the category, competitor, pricing, and feature context, should this concept look attractive to pursue as configured?",
+    ],
+    [
+        "Confidence",
+        "Overall confidence in the launch outlook based on the quality, consistency, and completeness of the supporting research.",
+        "How much trust should I place in the outlook recommendation?",
+    ],
+    [
+        "Amazon G2",
+        "Weighted Amazon Gate 2 readiness score on a 0-10 scale using the current rubric and available evidence.",
+        "How ready is this concept to move forward for Amazon Gate 2 review?",
+    ],
+    [
+        "Amazon Evidence",
+        "Confidence label for the Amazon G2 score based on how direct, complete, and well-supported the underlying data is.",
+        "How strong is the evidence behind the Amazon G2 score?",
+    ],
+]
+
+
+def resolved_source_channel(item: dict[str, Any]) -> str:
+    """Return the effective source channel, preferring explicit retailer domains."""
+    raw_channel = (optional_text(item.get("source_channel")) or "").lower()
+    url = optional_text(item.get("url")) or ""
+    detected_domain = urlparse(url).netloc.lower() if "://" in url else ""
+    domain = detected_domain or (optional_text(item.get("source_domain")) or "")
+    if domain:
+        host = urlparse(domain).netloc.lower() if "://" in domain else domain.lower()
+        host = host.replace("www.", "")
+        if host == "amazon.com" or host.endswith(".amazon.com"):
+            return "amazon"
+        if host == "homedepot.com" or host.endswith(".homedepot.com"):
+            return "home_depot"
+        if host == "walmart.com" or host.endswith(".walmart.com"):
+            return "walmart"
+        if host == "lowes.com" or host.endswith(".lowes.com"):
+            return "lowes"
+    return raw_channel
 
 
 def normalize_text(value: Any) -> str:
@@ -131,6 +174,270 @@ def key_value_rows(ws, row: int, pairs: list[tuple[str, Any]], columns: int = 2)
             index += 1
         row += 1
     return row
+
+
+def gate_snapshot(gate_readiness: dict[str, Any], channel: str, gate: str) -> dict[str, Any]:
+    """Return the matching gate snapshot when present."""
+    target_channel = channel.strip().lower()
+    target_gate = gate.strip().upper()
+    for snapshot in as_list(gate_readiness.get("snapshots")):
+        snapshot = as_dict(snapshot)
+        if (
+            normalize_text(snapshot.get("channel")).strip().lower() == target_channel
+            and normalize_text(snapshot.get("gate")).strip().upper() == target_gate
+        ):
+            return snapshot
+    return {}
+
+
+def issue_sentence(parts: list[str]) -> str:
+    """Join short issue fragments into one readable sentence."""
+    parts = [part for part in parts if part]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return f"{', '.join(parts[:-1])}, and {parts[-1]}"
+
+
+def blocker_action_summary(packet: dict[str, Any], analysis: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact top-of-report blocker/action summary."""
+    identity = as_dict(packet.get("identity"))
+    performance = as_dict(analysis.get("performance_estimation"))
+    pricing = as_dict(analysis.get("pricing_analysis"))
+    spec_coverage = as_dict(analysis.get("spec_coverage"))
+    gate_readiness = as_dict(analysis.get("gate_readiness"))
+
+    suggested = as_dict(pricing.get("suggested_msrp_range"))
+    margin_targets = as_dict(pricing.get("margin_targets"))
+    amazon_margin = as_dict(margin_targets.get("amazon"))
+    amazon_snapshot = gate_snapshot(gate_readiness, "amazon", "G2")
+
+    outlook = normalize_text(performance.get("launch_outlook")).strip().lower() or "mixed"
+    confidence = normalize_text(performance.get("confidence")).strip().lower() or "medium"
+    posture = normalize_text(performance.get("posture")).strip().lower() or "undetermined"
+    positioning = normalize_text(suggested.get("positioning")).strip().lower() or "undetermined"
+    evidence_label = normalize_text(amazon_snapshot.get("evidence_label")).strip().lower() or "unknown"
+
+    target_msrp = pricing.get("target_msrp")
+    target_vendor_cost = pricing.get("target_vendor_cost")
+    margin_conflict = bool(suggested.get("margin_conflict"))
+    minimum_margin_safe_price = suggested.get("minimum_margin_safe_price")
+    recommended_ceiling = suggested.get("recommended_ceiling")
+    notable_gaps = [normalize_text(item) for item in as_list(spec_coverage.get("notable_gaps")) if normalize_text(item)]
+    gap_count = len(notable_gaps)
+    feature_coverage = [as_dict(item) for item in as_list(spec_coverage.get("feature_coverage"))]
+    certification_coverage = [as_dict(item) for item in as_list(spec_coverage.get("certification_coverage"))]
+    zero_match_features = [entry for entry in feature_coverage if entry.get("matched_count") == 0]
+    zero_match_certs = [entry for entry in certification_coverage if entry.get("matched_count") == 0]
+    whitespace_labels = [
+        normalize_text(entry.get("label"))
+        for entry in zero_match_features
+        if normalize_text(entry.get("signal")).strip().lower() == "whitespace"
+    ]
+    weak_signal_labels = [
+        normalize_text(entry.get("label"))
+        for entry in feature_coverage
+        if entry.get("matched_count", 0) > 0 and normalize_text(entry.get("evidence_strength")).strip().lower() == "weak"
+    ]
+    zero_match_cert_labels = [normalize_text(entry.get("label")) for entry in zero_match_certs]
+
+    actions: list[dict[str, str]] = []
+
+    if target_msrp is None or target_vendor_cost is None:
+        missing_bits = []
+        if target_msrp is None:
+            missing_bits.append("target MSRP")
+        if target_vendor_cost is None:
+            missing_bits.append("landed vendor cost")
+        actions.append(
+            {
+                "category": "commercial",
+                "issue": "Pricing inputs are incomplete",
+                "why": f"Without {issue_sentence(missing_bits)}, the model has to infer key commercial inputs instead of scoring them directly.",
+                "action": "Enter a provisional MSRP and landed vendor cost for this row, then rerun the report.",
+                "impact": "Price Fit; Margin Viability; Outlook",
+            }
+        )
+
+    if margin_conflict:
+        why = "Current target pricing conflicts with the minimum margin-safe price."
+        if minimum_margin_safe_price and recommended_ceiling:
+            why = (
+                f"The current minimum margin-safe price ({normalize_text(minimum_margin_safe_price)}) "
+                f"sits above the recommended market ceiling ({normalize_text(recommended_ceiling)})."
+            )
+        actions.append(
+            {
+                "category": "commercial",
+                "issue": "Margin conflict is still unresolved",
+                "why": why,
+                "action": "Lower vendor cost, raise MSRP, or trim feature scope until the target clears the safety floor.",
+                "impact": "Margin Viability; Price Fit; Outlook",
+            }
+        )
+    elif positioning == "premium":
+        actions.append(
+            {
+                "category": "commercial",
+                "issue": "Target pricing is above the market band",
+                "why": "The current MSRP is positioned above the observed comparable range and needs stronger feature justification.",
+                "action": "Either lower MSRP or strengthen the differentiator and certification story enough to defend a premium position.",
+                "impact": "Price Fit; Outlook",
+            }
+        )
+
+    if posture == "no_stackline_context":
+        actions.append(
+            {
+                "category": "evidence",
+                "issue": "Market growth context is missing",
+                "why": "This row is missing usable Stackline market-growth context, which caps how strongly the outlook can score.",
+                "action": "Confirm the row is mapped to the correct Stackline segment and refresh the run before using Outlook as a go / no-go signal.",
+                "impact": "Market Support; Outlook",
+            }
+        )
+
+    if gap_count >= 3:
+        highlighted_labels = [label for label in whitespace_labels + zero_match_cert_labels if label][:3]
+        gap_preview = issue_sentence(highlighted_labels[:2]) or issue_sentence(notable_gaps[:2])
+        actions.append(
+            {
+                "category": "evidence",
+                "issue": "Competitor evidence does not yet validate several proposed attributes",
+                "why": (
+                    f"The current caution is being driven by evidence blind spots, not proof the concept is wrong. "
+                    f"Right now competitor records do not clearly confirm attributes such as {gap_preview}."
+                ),
+                "action": (
+                    "Treat these as validation items, not automatic negatives: keep intentional innovations, "
+                    "confirm whether each item is a real customer requirement or compliance need, and only cut it if it adds cost without demand support."
+                ),
+                "impact": "Confidence; Market Support; Outlook",
+            }
+        )
+    elif gap_count > 0 and outlook != "favorable":
+        highlighted_labels = [label for label in whitespace_labels + zero_match_cert_labels if label][:3]
+        gap_preview = issue_sentence(highlighted_labels[:2]) or issue_sentence(notable_gaps[:2])
+        actions.append(
+            {
+                "category": "evidence",
+                "issue": "A few proposed attributes still need market validation",
+                "why": (
+                    f"The concept includes attributes that are not yet well confirmed in competitor evidence, including {gap_preview}."
+                ),
+                "action": (
+                    "Decide whether these are intentional innovations, documentation-only blind spots, or true must-have requirements before treating them as blockers."
+                ),
+                "impact": "Confidence; Market Support",
+            }
+        )
+    elif weak_signal_labels and outlook != "favorable":
+        weak_preview = issue_sentence(weak_signal_labels[:2])
+        actions.append(
+            {
+                "category": "evidence",
+                "issue": "Some differentiator claims still rest on thin evidence",
+                "why": f"The market set only weakly supports items such as {weak_preview}, so the report should treat them as directional rather than proven gaps or advantages.",
+                "action": "Use these as hypotheses to validate, not reasons to downscore the concept unless stronger competitor evidence later contradicts them.",
+                "impact": "Confidence; Outlook",
+            }
+        )
+
+    if evidence_label in {"low", "none"}:
+        actions.append(
+            {
+                "category": "evidence",
+                "issue": "Amazon evidence is still thin",
+                "why": "The current Amazon Gate 2 score is supported by limited direct evidence, so the score is less trustworthy than the research confidence alone suggests.",
+                "action": "Treat the Amazon G2 score as directional until more direct listing / competitor evidence is collected.",
+                "impact": "Amazon Evidence; Confidence",
+            }
+        )
+
+    if not actions:
+        actions.append(
+            {
+                "category": "execution",
+                "issue": "Protect the current favorable read",
+                "why": "Current market, pricing, and competitor signals are supportive enough that the concept now reads cleanly.",
+                "action": "Lock the vendor quote, confirm the key certifications, and preserve the current feature set unless cost changes materially.",
+                "impact": "Outlook; Margin Viability; Execution Readiness",
+            }
+        )
+
+    actions = actions[:3]
+    action_categories = [entry.get("category", "") for entry in actions]
+    evidence_heavy = bool(actions) and all(category in {"evidence", "market_context"} for category in action_categories)
+
+    subcategory_label = normalize_text(identity.get("subcategory")).strip().lower()
+
+    if outlook == "favorable":
+        overall_read = (
+            f"This {'concept in ' + subcategory_label if subcategory_label else 'concept'} currently looks favorable to pursue "
+            f"with {confidence} research confidence."
+        )
+        remaining_watchouts = [entry["issue"].lower() for entry in actions if entry.get("category") != "execution"]
+        if remaining_watchouts:
+            why_not_stronger = (
+                "The concept is already favorable, but the remaining watchouts are "
+                f"{issue_sentence(remaining_watchouts)}."
+            )
+        else:
+            why_not_stronger = "The concept is already favorable; the main task now is to protect that position as quotes and compliance details firm up."
+    elif outlook == "mixed":
+        if evidence_heavy:
+            overall_read = (
+                "This concept looks viable, and the main constraint right now is incomplete market confirmation rather than a clearly weak product position."
+            )
+            why_not_stronger = (
+                "It is not stronger yet because the report still needs clearer evidence around "
+                f"{issue_sentence([entry['issue'].lower() for entry in actions])}."
+            )
+        else:
+            overall_read = (
+                "This concept looks viable, but it still needs targeted commercial or evidence cleanup before it becomes a strong go-forward candidate."
+            )
+            why_not_stronger = (
+                "It is not stronger yet because "
+                f"{issue_sentence([entry['issue'].lower() for entry in actions])}."
+            )
+    elif outlook == "cautious":
+        if evidence_heavy:
+            overall_read = (
+                "This concept has enough support to analyze, and the current caution is being driven more by evidence ambiguity than by proof the product is weak."
+            )
+            why_not_stronger = (
+                "The main watchouts right now are "
+                f"{issue_sentence([entry['issue'].lower() for entry in actions])}."
+            )
+        else:
+            overall_read = (
+                "This concept has enough support to analyze, but the current configuration is still being held back by one or more commercial or evidence blockers."
+            )
+            why_not_stronger = (
+                "The main blockers right now are "
+                f"{issue_sentence([entry['issue'].lower() for entry in actions])}."
+            )
+    else:
+        overall_read = "This concept still needs more complete evidence before the report can support a strong directional call."
+        why_not_stronger = (
+            "The current read is still limited because "
+            f"{issue_sentence([entry['issue'].lower() for entry in actions])}."
+        )
+
+    table_rows = [
+        [f"P{index}", entry["issue"], entry["why"], entry["action"], entry["impact"]]
+        for index, entry in enumerate(actions, start=1)
+    ]
+
+    return {
+        "overall_read": overall_read,
+        "why_not_stronger": why_not_stronger,
+        "actions": table_rows,
+    }
 
 
 def merged_text_row(ws, row: int, label: str, value: Any) -> int:
@@ -214,8 +521,25 @@ def looks_like_amazon_asin(value: str | None) -> bool:
 
 def source_channel_label(item: dict[str, Any]) -> str:
     """Render a human-friendly source channel label."""
-    channel = (optional_text(item.get("source_channel")) or "").lower()
+    channel = resolved_source_channel(item)
     return CHANNEL_DISPLAY_NAMES.get(channel, channel.replace("_", " ").title() or "Unknown")
+
+
+def discovery_source_label(item: dict[str, Any]) -> str:
+    """Render the original discovery source for inferred competitors."""
+    domain = optional_text(item.get("discovery_source_domain"))
+    if domain:
+        host = urlparse(domain if "://" in domain else f"//{domain}").netloc or domain
+        return host.replace("www.", "")
+    channel = optional_text(item.get("discovery_source_channel"))
+    if channel:
+        lowered = channel.lower()
+        return CHANNEL_DISPLAY_NAMES.get(lowered, lowered.replace("_", " ").title())
+    domain = optional_text(item.get("source_domain"))
+    if domain:
+        host = urlparse(domain if "://" in domain else f"//{domain}").netloc or domain
+        return host.replace("www.", "")
+    return source_channel_label(item)
 
 
 def listing_identifier_from_url(url: str | None, source_channel: str | None) -> str | None:
@@ -243,7 +567,7 @@ def listing_identifier_from_url(url: str | None, source_channel: str | None) -> 
 
 def listing_identifier(item: dict[str, Any]) -> str:
     """Return the best channel-aware identifier label for one competitor listing."""
-    source_channel = (optional_text(item.get("source_channel")) or "").lower()
+    source_channel = resolved_source_channel(item)
     sku = optional_text(item.get("sku"))
     model_number = optional_text(item.get("model_number"))
     url = optional_text(item.get("url"))
@@ -286,6 +610,19 @@ def listing_link_cell(item: dict[str, Any]) -> dict[str, str] | str:
     }
 
 
+def verification_status(item: dict[str, Any]) -> str:
+    """Return the normalized verification status for one competitor record."""
+    status = (optional_text(item.get("verification_status")) or "").lower()
+    if status in {"verified_listing", "inferred_competitor"}:
+        return status
+    return "verified_listing"
+
+
+def verification_label(item: dict[str, Any]) -> str:
+    """Render a user-facing verification label."""
+    return "Verified Listing" if verification_status(item) == "verified_listing" else "Inferred Competitor"
+
+
 def sort_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Sort candidate records by confidence, then by price."""
     def sort_key(item: dict[str, Any]) -> tuple[float, float, str]:
@@ -305,11 +642,14 @@ def candidate_rows(
     normalized_items: list[dict[str, Any]],
     channels: set[str],
     limit: int = 10,
+    verification_filter: str | None = "verified_listing",
 ) -> list[list[Any]]:
     """Build a compact competitor table filtered by source channel."""
     rows = []
     for item in sort_candidates(normalized_items):
-        if normalize_text(item.get("source_channel")) not in channels:
+        if resolved_source_channel(item) not in channels:
+            continue
+        if verification_filter and verification_status(item) != verification_filter:
             continue
         rows.append(
             [
@@ -323,6 +663,31 @@ def candidate_rows(
                 item.get("cct"),
                 item.get("cri"),
                 listing_link_cell(item),
+                item.get("match_confidence"),
+            ]
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def inferred_competitor_rows(
+    normalized_items: list[dict[str, Any]],
+    limit: int = 12,
+) -> list[list[Any]]:
+    """Build a table of inferred competitors that need listing verification."""
+    rows = []
+    for item in sort_candidates(normalized_items):
+        if verification_status(item) != "inferred_competitor":
+            continue
+        rows.append(
+            [
+                item.get("brand"),
+                item.get("product_title"),
+                source_channel_label(item),
+                discovery_source_label(item),
+                listing_link_cell(item),
+                item.get("verification_reason") or item.get("extraction_notes") or item.get("match_notes"),
                 item.get("match_confidence"),
             ]
         )
@@ -688,6 +1053,8 @@ def render_row_sheet(
     ideation_optimization = as_dict(analysis.get("ideation_optimization"))
     optimization_scorecard = as_dict(ideation_optimization.get("optimization_scorecard"))
     optimization_modifiers = as_list(ideation_optimization.get("active_modifiers"))
+    normalized_summary = as_dict(normalized.get("summary"))
+    action_summary = blocker_action_summary(packet, analysis)
 
     ws.cell(row=1, column=1, value=identity.get("ideation_name"))
     ws.cell(row=1, column=1).font = TITLE_FONT
@@ -697,6 +1064,16 @@ def render_row_sheet(
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=10)
 
     row = 4
+    row = section_header(ws, row, "What To Do Next")
+    row = merged_text_row(ws, row, "Overall Read", action_summary.get("overall_read"))
+    row = merged_text_row(ws, row, "Why Not Stronger", action_summary.get("why_not_stronger"))
+    row = write_table(
+        ws,
+        row,
+        "Priority Actions",
+        ["Priority", "Issue", "Why It Matters", "Recommended Action", "Expected Impact"],
+        as_list(action_summary.get("actions")),
+    )
     row = section_header(ws, row, "Section A - Ideation + Reference Anchor Context")
     row = key_value_rows(
         ws,
@@ -736,6 +1113,15 @@ def render_row_sheet(
         "Performance Rationale",
         " | ".join(as_list(performance.get("rationale"))),
     )
+    row = key_value_rows(
+        ws,
+        row,
+        [
+            ("Verified Listings", normalized_summary.get("verified_listing_count")),
+            ("Inferred Competitors", normalized_summary.get("inferred_competitor_count")),
+        ],
+        columns=2,
+    )
     row = write_table(
         ws,
         row,
@@ -762,23 +1148,31 @@ def render_row_sheet(
     row = write_table(
         ws,
         row,
-        "Section B - Amazon Competitors",
+        "Section B - Amazon Competitors (Verified Listings)",
         ["Brand", "Product", "Identifier", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Source Link", "Confidence"],
-        candidate_rows(as_list(normalized.get("items")), AMAZON_CHANNELS, limit=10),
+        candidate_rows(as_list(normalized.get("items")), AMAZON_CHANNELS, limit=10, verification_filter="verified_listing"),
     )
 
     row = write_table(
         ws,
         row,
-        "Section C - Brick-and-Mortar / Direct Competitors",
+        "Section C - Brick-and-Mortar / Direct Competitors (Verified Listings)",
         ["Brand", "Product", "Identifier", "Channel", "Price", "Wattage", "Lumens", "CCT", "CRI", "Source Link", "Confidence"],
-        candidate_rows(as_list(normalized.get("items")), BM_DIRECT_CHANNELS, limit=12),
+        candidate_rows(as_list(normalized.get("items")), BM_DIRECT_CHANNELS, limit=12, verification_filter="verified_listing"),
     )
 
     row = write_table(
         ws,
         row,
-        "Section D - Pricing Position",
+        "Section D - Inferred Competitors / Needs Verification",
+        ["Brand", "Product", "Likely Channel", "Supporting Source", "Source Link", "Why Inferred", "Confidence"],
+        inferred_competitor_rows(as_list(normalized.get("items")), limit=12),
+    )
+
+    row = write_table(
+        ws,
+        row,
+        "Section E - Pricing Position",
         ["Metric", "Value"],
         pricing_position_rows(pricing),
     )
@@ -814,7 +1208,7 @@ def render_row_sheet(
     row = write_table(
         ws,
         row,
-        "Section E - Feature / Certification Signals",
+        "Section F - Feature / Certification Signals",
         ["Type", "Label", "Signal", "Evidence", "Coverage %", "Matched", "Recommendation"],
         spec_action_rows(spec_coverage),
     )
@@ -883,7 +1277,7 @@ def render_row_sheet(
     row = write_list_section(ws, row, "Recommendations", as_list(analysis.get("recommendations")))
     row = write_list_section(ws, row, "Notes", as_list(analysis.get("notes")))
 
-    row = section_header(ws, row, "Section F - PRD Generator Pre-Fill")
+    row = section_header(ws, row, "Section G - PRD Generator Pre-Fill")
     row = key_value_rows(ws, row, prd_prefill_pairs(packet, analysis))
 
 
@@ -935,7 +1329,7 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
     ws.cell(row=1, column=1, value="Completed Research Rows")
     ws.cell(row=1, column=1).font = TITLE_FONT
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
-    key_value_rows(
+    row = key_value_rows(
         ws,
         3,
         [
@@ -944,9 +1338,16 @@ def build_summary_sheet(ws, payloads: list[tuple[int, dict[str, Any], dict[str, 
         ],
         columns=1,
     )
+    row = write_table(
+        ws,
+        row + 1,
+        "Summary Metric Guide",
+        ["Metric", "What It Means", "Question It Answers"],
+        SUMMARY_METRIC_GUIDE_ROWS,
+    )
     write_table(
         ws,
-        6,
+        row,
         "Completed Rows",
         ["Row", "Ideation", "Category Owner", "Category", "Outlook", "Confidence", "Amazon G2", "Amazon Evidence", "Report File"],
         [

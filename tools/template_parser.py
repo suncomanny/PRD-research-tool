@@ -98,6 +98,57 @@ def normalize_value(value: Any) -> Any:
     return value
 
 
+def detect_template_layout(worksheet) -> dict[str, int]:
+    """Locate the section row, header row, and first data row in the ideation sheet."""
+    required_headers = {
+        "category",
+        "subcategory",
+        "ideation_name",
+        "sunco_reference_sku",
+    }
+
+    max_scan_row = min(12, worksheet.max_row)
+    for row_index in range(1, max_scan_row + 1):
+        header_keys = {
+            normalize_header(worksheet.cell(row=row_index, column=column_index).value)
+            for column_index in range(1, worksheet.max_column + 1)
+        }
+        header_keys.discard(None)
+        if required_headers.issubset(header_keys):
+            section_row = max(1, row_index - 1)
+            return {
+                "section_row": section_row,
+                "header_row": row_index,
+                "data_start_row": row_index + 1,
+            }
+
+    raise ValueError("Could not locate the ideation header row in the workbook.")
+
+
+def parse_workbook_metadata(worksheet, section_row: int) -> dict[str, Any]:
+    """Read workbook-level metadata rows that appear above the section/header block."""
+    metadata: dict[str, Any] = {}
+    if section_row <= 1:
+        return metadata
+
+    for row_index in range(1, section_row):
+        for column_index in range(1, worksheet.max_column):
+            key = normalize_header(worksheet.cell(row=row_index, column=column_index).value)
+            if key not in {"category_owner", "batch_owner"}:
+                continue
+
+            value = worksheet.cell(row=row_index, column=column_index + 1).value
+            if value is None:
+                continue
+
+            text = str(value).strip()
+            if text:
+                metadata["category_owner"] = text
+
+    return metadata
+    return value
+
+
 def coerce_field_value(field_key: str, value: Any) -> Any:
     """Apply lightweight type coercion for common template field patterns."""
     normalized = normalize_value(value)
@@ -127,17 +178,28 @@ def split_list_value(value: Any) -> list[str] | None:
     return parts or None
 
 
-def build_column_specs(worksheet) -> list[dict[str, Any]]:
-    """Read sections from row 1 and column headers from row 2."""
+def build_column_specs(
+    worksheet,
+    section_row: int | None = None,
+    header_row: int | None = None,
+) -> list[dict[str, Any]]:
+    """Read section labels and column headers from the ideation sheet."""
+    if section_row is None or header_row is None:
+        layout = detect_template_layout(worksheet)
+        section_row = layout["section_row"]
+        header_row = layout["header_row"]
+
     specs = []
     current_section = None
 
     for column_index in range(1, worksheet.max_column + 1):
-        section_value = normalize_header(worksheet.cell(row=1, column=column_index).value)
+        section_value = normalize_header(
+            worksheet.cell(row=section_row, column=column_index).value
+        )
         if section_value:
             current_section = SECTION_KEY_OVERRIDES.get(section_value, section_value)
 
-        header_value = worksheet.cell(row=2, column=column_index).value
+        header_value = worksheet.cell(row=header_row, column=column_index).value
         header_key = normalize_header(header_value)
         if not header_key:
             continue
@@ -352,11 +414,17 @@ def parse_template(
         raise ValueError(f"Sheet '{sheet_name}' not found in workbook.")
 
     worksheet = workbook[sheet_name]
-    column_specs = build_column_specs(worksheet)
+    layout = detect_template_layout(worksheet)
+    workbook_metadata = parse_workbook_metadata(worksheet, layout["section_row"])
+    column_specs = build_column_specs(
+        worksheet,
+        section_row=layout["section_row"],
+        header_row=layout["header_row"],
+    )
     ideations = []
     warnings = []
 
-    for row_number in range(3, worksheet.max_row + 1):
+    for row_number in range(layout["data_start_row"], worksheet.max_row + 1):
         row_sections: dict[str, dict[str, Any]] = {}
         row_has_data = False
 
@@ -376,6 +444,8 @@ def parse_template(
             continue
 
         identity = row_sections.setdefault("identity", {})
+        if workbook_metadata.get("category_owner") and not identity.get("category_owner"):
+            identity["category_owner"] = workbook_metadata["category_owner"]
         reference_sku = identity.get("sunco_reference_sku")
         issues = []
 
@@ -452,6 +522,7 @@ def parse_template(
     return {
         "workbook_path": str(Path(workbook_path).resolve()),
         "sheet_name": sheet_name,
+        "workbook_metadata": workbook_metadata,
         "ideation_count": len(ideations),
         "ideations": ideations,
         "warnings": warnings,

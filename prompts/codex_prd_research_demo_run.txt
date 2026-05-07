@@ -1,0 +1,19 @@
+PRD Research Demo Run
+
+Use only the latest shared template at:
+C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx
+
+This is a demo run. Treat the current template as the source of truth and assume the output/report folders may have been intentionally cleaned before the run.
+
+What to do:
+1. Create a fresh research session.
+2. Use Codex first and complete as much as possible locally.
+3. Reuse prior completed research only when it materially matches the current template inputs.
+4. If the current template can be supported without new external collection, finalize the session and publish the workbook immediately.
+5. Only hand off to Claude if you confirm a real remaining raw collection gap that Codex cannot satisfy.
+
+What to return:
+1. session path
+2. whether Codex completed the run or needs Claude
+3. if complete, the final published workbook path
+4. if blocked, the smallest possible Claude batch prompt

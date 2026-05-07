@@ -47,6 +47,22 @@ IGNORED_ARTIFACT_NOTES = {
     "populate this file using schemas/collection-artifact.schema.json.",
 }
 
+INFERENCE_MARKERS = (
+    "search snippet",
+    "third-party",
+    "family-level",
+    "family page",
+    "same family",
+    "analogue",
+    "not recoverable",
+    "not recovered",
+    "reference note",
+    "series-level",
+    "series page",
+    "used as a family-level",
+    "used as a family-level amazon analogue",
+)
+
 
 def normalize_text(value: Any) -> str | None:
     """Normalize optional values into stripped strings."""
@@ -162,6 +178,114 @@ def detect_source_domain(url: str | None) -> str | None:
         return None
     parsed = urlparse(url)
     return parsed.netloc or None
+
+
+def canonical_source_channel(
+    source_channel: str | None,
+    source_domain: str | None,
+) -> str | None:
+    """Resolve the effective source channel, preferring the URL domain when it is explicit."""
+    channel = normalize_text(source_channel)
+    domain = normalize_text(source_domain)
+    if domain:
+        lowered = domain.lower().replace("www.", "")
+        if lowered == "amazon.com" or lowered.endswith(".amazon.com"):
+            return "amazon"
+        if lowered == "homedepot.com" or lowered.endswith(".homedepot.com"):
+            return "home_depot"
+        if lowered == "walmart.com" or lowered.endswith(".walmart.com"):
+            return "walmart"
+        if lowered == "lowes.com" or lowered.endswith(".lowes.com"):
+            return "lowes"
+        if lowered == "seed":
+            return "stackline_seed"
+    return channel
+
+
+def normalized_domain_for_compare(value: str | None) -> str | None:
+    """Normalize domains for equality checks."""
+    text = normalize_text(value)
+    if not text:
+        return None
+    parsed = urlparse(text if "://" in text else f"//{text}")
+    host = (parsed.netloc or parsed.path or "").strip().lower()
+    return host.replace("www.", "") or None
+
+
+def is_search_results_url(url: str | None) -> bool:
+    """Return whether a URL is a search/discovery page rather than a product listing."""
+    if not url or "://" not in url:
+        return False
+    parsed = urlparse(url)
+    host = parsed.netloc.lower().replace("www.", "")
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    if host == "amazon.com" and path == "/s":
+        return True
+    if "search" in path:
+        return True
+    if host == "amazon.com" and "k=" in query:
+        return True
+    return False
+
+
+def classify_verification(
+    *,
+    raw_source_channel: str | None,
+    source_channel: str | None,
+    original_source_domain: str | None,
+    source_domain: str | None,
+    url: str | None,
+    collection_method: str | None,
+    extraction_notes: str | None,
+    match_notes: str | None,
+    raw_observations: list[str],
+) -> tuple[str, str]:
+    """Classify whether a competitor row is a verified listing or an inferred competitor."""
+    reasons: list[str] = []
+    raw_channel = normalize_text(raw_source_channel)
+    effective_channel = normalize_text(source_channel)
+    original_domain = normalize_text(original_source_domain)
+    effective_domain = normalize_text(source_domain)
+
+    if effective_channel == "stackline_seed":
+        reasons.append("Derived from Stackline seed data rather than a public listing URL.")
+
+    if raw_channel and effective_channel and raw_channel != effective_channel:
+        reasons.append(
+            f"Original collection channel was '{raw_channel}', but the saved URL resolves to '{effective_channel}'."
+        )
+
+    if (
+        normalized_domain_for_compare(original_domain)
+        and normalized_domain_for_compare(effective_domain)
+        and normalized_domain_for_compare(original_domain) != normalized_domain_for_compare(effective_domain)
+    ):
+        reasons.append(
+            f"Original source domain '{original_domain}' differs from listing URL domain '{effective_domain}'."
+        )
+
+    if is_search_results_url(url):
+        reasons.append("Linked URL is a search/discovery page rather than a direct product detail page.")
+
+    note_text = " ".join(
+        [
+            normalize_text(extraction_notes) or "",
+            normalize_text(match_notes) or "",
+            " ".join(raw_observations),
+        ]
+    ).lower()
+    for marker in INFERENCE_MARKERS:
+        if marker in note_text:
+            reasons.append(f"Notes indicate search-led or inferred matching: '{marker}'.")
+            break
+
+    if reasons:
+        return "inferred_competitor", " ".join(reasons)
+
+    if effective_domain:
+        return "verified_listing", f"Direct listing URL and channel agree on '{effective_domain}'."
+    return "verified_listing", "Direct listing record with no detected source inconsistencies."
 
 
 def infer_pack_quantity(*values: Any) -> float | None:
@@ -372,12 +496,19 @@ def normalize_record(item: dict[str, Any], fallback_channel: str) -> dict[str, A
     """Convert a raw / seed item into the shared competitor-result shape."""
     title = normalize_text(item.get("product_title") or item.get("title"))
     brand = normalize_text(item.get("brand"))
-    source_channel = normalize_text(item.get("source_channel")) or fallback_channel
+    url = normalize_text(item.get("url"))
+    detected_domain = detect_source_domain(url)
+    original_source_domain = normalize_text(item.get("source_domain"))
+    raw_source_channel = normalize_text(item.get("source_channel")) or fallback_channel
+    source_domain = detected_domain or original_source_domain
+    source_channel = canonical_source_channel(
+        raw_source_channel,
+        source_domain,
+    ) or fallback_channel
     collection_method = normalize_text(item.get("collection_method"))
     if not title or not brand or not source_channel:
         return None
 
-    url = normalize_text(item.get("url"))
     if not url and source_channel == "stackline_seed":
         synthetic = build_candidate_id(
             {
@@ -393,11 +524,31 @@ def normalize_record(item: dict[str, Any], fallback_channel: str) -> dict[str, A
     if not url:
         return None
 
+    extraction_notes = normalize_text(item.get("extraction_notes"))
+    match_notes = normalize_text(item.get("match_notes"))
+    raw_observations = unique_preserve_order(
+        listify(item.get("raw_observations"))
+        + listify(item.get("notes"))
+    )
+
     dimming_type = infer_dimming_type(item.get("dimming_type"), title)
+    verification_status, verification_reason = classify_verification(
+        raw_source_channel=raw_source_channel,
+        source_channel=source_channel,
+        original_source_domain=original_source_domain,
+        source_domain=source_domain,
+        url=url,
+        collection_method=collection_method,
+        extraction_notes=extraction_notes,
+        match_notes=match_notes,
+        raw_observations=raw_observations,
+    )
     record = {
         "candidate_id": normalize_text(item.get("candidate_id")),
         "source_channel": source_channel,
-        "source_domain": normalize_text(item.get("source_domain")) or detect_source_domain(url),
+        "source_domain": source_domain,
+        "discovery_source_channel": raw_source_channel,
+        "discovery_source_domain": original_source_domain,
         "collection_method": collection_method or ("manual" if source_channel != "stackline_seed" else "stackline_seed"),
         "brand": brand,
         "product_title": title,
@@ -425,12 +576,11 @@ def normalize_record(item: dict[str, Any], fallback_channel: str) -> dict[str, A
         "review_count": parse_number(item.get("review_count")),
         "availability": normalize_text(item.get("availability")),
         "match_confidence": parse_number(item.get("match_confidence")),
-        "match_notes": normalize_text(item.get("match_notes")),
-        "extraction_notes": normalize_text(item.get("extraction_notes")),
-        "raw_observations": unique_preserve_order(
-            listify(item.get("raw_observations"))
-            + listify(item.get("notes"))
-        ),
+        "match_notes": match_notes,
+        "extraction_notes": extraction_notes,
+        "raw_observations": raw_observations,
+        "verification_status": verification_status,
+        "verification_reason": verification_reason,
     }
     record["candidate_id"] = record["candidate_id"] or build_candidate_id(record)
     return compact_dict(record)
@@ -441,6 +591,8 @@ def merge_records(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, A
     result = dict(base)
     for key, value in incoming.items():
         if value in (None, "", [], {}):
+            continue
+        if key in {"verification_status", "verification_reason"}:
             continue
         if key in {"certifications", "features", "raw_observations"}:
             merged = list(result.get(key, [])) + list(value)
@@ -454,6 +606,22 @@ def merge_records(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, A
             continue
         if result.get(key) in (None, "", [], {}):
             result[key] = value
+
+    base_status = normalize_text(base.get("verification_status")) or "verified_listing"
+    incoming_status = normalize_text(incoming.get("verification_status")) or "verified_listing"
+    base_reason = normalize_text(base.get("verification_reason"))
+    incoming_reason = normalize_text(incoming.get("verification_reason"))
+
+    if "verified_listing" in {base_status, incoming_status}:
+        result["verification_status"] = "verified_listing"
+        result["verification_reason"] = (
+            base_reason if base_status == "verified_listing" else incoming_reason
+        ) or "Direct listing URL verified after dedupe."
+    else:
+        result["verification_status"] = "inferred_competitor"
+        reasons = unique_preserve_order([reason for reason in [base_reason, incoming_reason] if reason])
+        if reasons:
+            result["verification_reason"] = " ".join(reasons)
     return result
 
 
@@ -553,6 +721,8 @@ def build_summary(
     stackline_seed_count: int,
     pre_dedupe_count: int,
     final_count: int,
+    verified_count: int,
+    inferred_count: int,
 ) -> dict[str, Any]:
     """Build normalized artifact summary fields."""
     return {
@@ -561,6 +731,8 @@ def build_summary(
         "stackline_seed_count": stackline_seed_count,
         "pre_dedupe_count": pre_dedupe_count,
         "final_item_count": final_count,
+        "verified_listing_count": verified_count,
+        "inferred_competitor_count": inferred_count,
     }
 
 
@@ -599,6 +771,12 @@ def build_normalized_artifact(session_dir: Path, row_number: int) -> dict[str, A
         return None
 
     deduped = dedupe_records(combined)
+    verified_count = sum(
+        1 for item in deduped if normalize_text(item.get("verification_status")) == "verified_listing"
+    )
+    inferred_count = sum(
+        1 for item in deduped if normalize_text(item.get("verification_status")) == "inferred_competitor"
+    )
     normalized_status = derive_normalized_status(
         raw_stage_statuses=list(raw_stage_statuses.values()),
         item_count=len(deduped),
@@ -628,6 +806,8 @@ def build_normalized_artifact(session_dir: Path, row_number: int) -> dict[str, A
             stackline_seed_count=len(stackline_seed_records),
             pre_dedupe_count=len(combined),
             final_count=len(deduped),
+            verified_count=verified_count,
+            inferred_count=inferred_count,
         ),
         "notes": unique_preserve_order(
             notes

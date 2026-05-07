@@ -15,7 +15,8 @@ import argparse
 import json
 import re
 from collections import Counter
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -1127,13 +1128,13 @@ Session root: `{session_dir}`
 Workbook: `{Path(workbook_path).resolve()}`
 Batch id: `{batch_id}`
 
-You are the preferred collector for Step `4C`, `4D`, and `4E`, but Codex may repair or replace malformed raw artifacts if your session fails.
+You are the preferred collector for Step `4C`, `4D`, and `4E`, but only after Codex has already prepared the session and narrowed the missing work.
+Codex owns deterministic local work first. You only own the exact raw collection batch handed to you.
 
 Do next:
-1. Check the next actionable tasks with:
-   - `python tools/research_session_manager.py next-batch "{session_dir}" --limit 3`
-2. Use `instructions/STEP4_PROMPT.md` as the task template.
-3. Work one task at a time: exactly `1 row x 1 channel`.
+1. Use the Codex-provided batch scope instead of exploring the whole session.
+2. Read only the manifest plus the packet files named in that batch handoff.
+3. Work only the listed `row x channel` tasks.
 4. Write results only into:
    - `raw/amazon/row_###_amazon_raw.json`
    - `raw/brick_and_mortar/row_###_brick_and_mortar_raw.json`
@@ -1147,13 +1148,14 @@ Do next:
 
 Collection rules:
 - Use the row packet's `research_plan` as the source of truth.
-- Read channel queries from `research_plan.amazon`, `research_plan.brick_and_mortar`, and `research_plan.known_competitor_brands`.
+- Read channel queries only for the rows/channels in the handed-off batch.
 - Use `research_plan.target_price_band`, `research_plan.brand_watchlist`, `research_plan.must_validate`, and `research_plan.collection_targets` to decide what belongs in the raw file.
 - Keep raw collection faithful. Do not invent normalized values.
 - When a match is weak, include it only if `match_confidence` and `match_notes` explain why.
 - Record empty findings explicitly by setting `artifact_status` to `complete` with notes, or `blocked` with `blocking_issues`.
 
 Do not do next:
+- Do not re-plan the session.
 - Do not edit `normalized/`
 - Do not edit `analysis/`
 - Do not edit `reports/`
@@ -1168,16 +1170,12 @@ Session root: `{session_dir}`
 Workbook: `{Path(workbook_path).resolve()}`
 Batch id: `{batch_id}`
 
-You own exactly one raw-collection task at a time: `1 row x 1 channel`.
+You own only the exact raw-collection tasks handed off by Codex.
 
 Do next:
-1. Check the next actionable tasks with:
-   - `python tools/research_session_manager.py next-batch "{session_dir}" --limit 3`
-2. Use `instructions/STEP4_PROMPT.md` as the task template.
-3. Pick exactly one task:
-   - `amazon_collection`
-   - `brick_and_mortar_collection`
-   - `brand_site_collection`
+1. Use the Codex-provided batch scope instead of reading the whole session.
+2. Use `instructions/STEP4_PROMPT.md` as the task template when needed.
+3. Pick only the listed tasks from that batch.
 4. Write results only into:
    - `raw/amazon/row_###_amazon_raw.json`
    - `raw/brick_and_mortar/row_###_brick_and_mortar_raw.json`
@@ -1193,6 +1191,7 @@ Collector rules:
 - If the artifact already says `complete` or `blocked`, skip it.
 - If the session dies mid-task, leave the file as `in_progress` with whatever has been captured so far.
 - If a raw artifact exists but fails schema validation, Codex may repair it after you stop.
+- Do not spend time on session-wide exploration or replanning. Codex should do that first.
 """
 
 

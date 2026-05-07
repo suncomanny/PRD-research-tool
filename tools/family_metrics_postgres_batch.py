@@ -11,14 +11,15 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
+UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
 from openpyxl import load_workbook
 
 from sku_lookup import strip_pack_suffix
-from template_parser import DEFAULT_WORKBOOK, SHEET_NAME, normalize_header
+from template_parser import DEFAULT_WORKBOOK, SHEET_NAME, detect_template_layout, normalize_header
 
 
 AMAZON_CHANNEL_ID = 11929
@@ -87,10 +88,11 @@ def collect_reference_rows_from_workbook(workbook_path: Path, sheet_name: str) -
         raise ValueError(f"Sheet '{sheet_name}' not found in workbook.")
 
     ws = workbook[sheet_name]
+    layout = detect_template_layout(ws)
     header_index: dict[int, str] = {}
 
     for col in range(1, ws.max_column + 1):
-        header_key = normalize_header(ws.cell(row=2, column=col).value)
+        header_key = normalize_header(ws.cell(row=layout["header_row"], column=col).value)
         if header_key:
             header_index[col] = header_key
 
@@ -100,7 +102,7 @@ def collect_reference_rows_from_workbook(workbook_path: Path, sheet_name: str) -
     sku_column = sku_columns[0]
 
     references: dict[str, dict[str, Any]] = {}
-    for row in range(3, ws.max_row + 1):
+    for row in range(layout["data_start_row"], ws.max_row + 1):
         raw_value = ws.cell(row=row, column=sku_column).value
         if raw_value is None:
             continue

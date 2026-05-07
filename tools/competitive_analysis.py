@@ -1085,12 +1085,15 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
             numeric_guidance.append(entry)
 
     notable_gaps = []
+    evidence_blind_spots = []
     for entry in feature_coverage:
         if entry["matched_count"] == 0:
-            notable_gaps.append(f"No normalized competitors currently show '{entry['label']}'.")
+            target_bucket = evidence_blind_spots if entry.get("signal") == "whitespace" else notable_gaps
+            target_bucket.append(f"No normalized competitors currently show '{entry['label']}'.")
     for entry in certification_coverage:
         if entry["matched_count"] == 0:
-            notable_gaps.append(f"No normalized competitors currently show '{entry['label']}' certification.")
+            target_bucket = evidence_blind_spots if entry.get("signal") == "whitespace" else notable_gaps
+            target_bucket.append(f"No normalized competitors currently show '{entry['label']}' certification.")
 
     return {
         "feature_watchlist": feature_watchlist,
@@ -1099,6 +1102,7 @@ def build_spec_coverage(packet: dict[str, Any], items: list[dict[str, Any]]) -> 
         "certification_coverage": certification_coverage,
         "numeric_guidance": numeric_guidance,
         "notable_gaps": notable_gaps,
+        "evidence_blind_spots": evidence_blind_spots,
     }
 
 
