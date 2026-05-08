@@ -59,8 +59,8 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\render_
   - copies the combined workbook into the locally synced SharePoint reports folder
   - can optionally also copy the row-level reports into a session subfolder
   - by default names the published combined workbook as `CategoryOwner_Category_YYYYMMDD.xlsx`
-  - falls back to `GOALS.md` category ownership mapping when the workbook/session does not carry a category owner yet
-  - falls back to `UnknownOwner` only when neither the workbook nor `GOALS.md` yields an owner
+  - falls back to `config/category_owner_reference.json` when the workbook/session does not carry a category owner yet
+  - falls back to `UnknownOwner` only when neither the workbook nor category owner reference yields an owner
   - appends `_02`, `_03`, etc. instead of overwriting if multiple reports are published on the same day
 
 ## Building Blocks

@@ -21,7 +21,7 @@ Use these exact paths:
 - Shared reports root:
   C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Research Reports
 - Category owner mapping:
-  C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\GOALS.md
+  C:\Users\Sunco\Projects\PRD-research-tool\config\category_owner_reference.json
 
 Batch scope:
 - Batch label:

@@ -20,7 +20,8 @@ from typing import Any
 
 DEFAULT_SYNC_ROOT = Path(r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research")
 DEFAULT_REPORTS_DIRNAME = "Research Reports"
-DEFAULT_GOALS_PATH = Path(r"C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\GOALS.md")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_CATEGORY_OWNER_REFERENCE_PATH = REPO_ROOT / "config" / "category_owner_reference.json"
 
 
 def reports_root_from_env_or_default() -> Path:
@@ -31,12 +32,12 @@ def reports_root_from_env_or_default() -> Path:
     return (DEFAULT_SYNC_ROOT / DEFAULT_REPORTS_DIRNAME).resolve()
 
 
-def goals_path_from_env_or_default() -> Path:
-    """Return the markdown file used for category-owner fallback lookup."""
-    override = os.getenv("PRD_CATEGORY_OWNER_GOALS_FILE")
+def category_owner_reference_path_from_env_or_default() -> Path:
+    """Return the JSON file used for category-owner fallback lookup."""
+    override = os.getenv("PRD_CATEGORY_OWNER_REFERENCE_FILE")
     if override:
         return Path(override).expanduser().resolve()
-    return DEFAULT_GOALS_PATH.resolve()
+    return DEFAULT_CATEGORY_OWNER_REFERENCE_PATH.resolve()
 
 
 def combined_workbook_for_session(session_root: Path) -> Path:
@@ -104,53 +105,44 @@ def resolve_component_label(values: list[str], *, empty_fallback: str, mixed_fal
     return sanitize_filename_component(unique_values[0], fallback=empty_fallback)
 
 
-def parse_goals_owner_map(goals_path: Path) -> dict[tuple[str, str | None], str]:
-    """Parse the owner/category/subcategory markdown mapping from GOALS.md."""
-    if not goals_path.exists():
+def parse_category_owner_reference(reference_path: Path) -> dict[tuple[str, str | None], str]:
+    """Parse the owner/category/subcategory mapping from the local JSON reference."""
+    if not reference_path.exists():
         return {}
 
     owner_map: dict[tuple[str, str | None], str] = {}
-    current_owner: str | None = None
-    current_category: str | None = None
+    payload = json.loads(reference_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return owner_map
 
-    for raw_line in goals_path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        normalized_line = raw_line.replace("\u00a0", " ").rstrip()
-        stripped_line = normalized_line.strip()
-        if not stripped_line:
+    for owner, category_entries in payload.items():
+        owner_text = str(owner).strip()
+        if not owner_text or not isinstance(category_entries, list):
             continue
-
-        owner_match = re.match(r"^([A-Za-z][A-Za-z .'-]*):\s*$", stripped_line)
-        if owner_match:
-            current_owner = owner_match.group(1).strip()
-            current_category = None
-            continue
-
-        if not current_owner:
-            continue
-
-        bullet_match = re.match(r"^(\s*)- (.+?)\s*(?:\(.*\))?$", normalized_line)
-        if not bullet_match:
-            continue
-
-        indent = len(bullet_match.group(1) or "")
-        bullet_text = bullet_match.group(2).strip()
-        if indent >= 2 and current_category:
-            owner_map[
-                (
-                    normalized_label_key(current_category),
-                    normalized_label_key(bullet_text),
-                )
-            ] = current_owner
-            continue
-
-        current_category = bullet_text
-        owner_map[(normalized_label_key(current_category), None)] = current_owner
+        for entry in category_entries:
+            if isinstance(entry, str):
+                category = entry.strip()
+                subcategories: list[Any] = []
+            elif isinstance(entry, dict):
+                category = str(entry.get("category") or "").strip()
+                raw_subcategories = entry.get("subcategories") or []
+                subcategories = raw_subcategories if isinstance(raw_subcategories, list) else []
+            else:
+                continue
+            category_key = normalized_label_key(category)
+            if not category_key:
+                continue
+            owner_map[(category_key, None)] = owner_text
+            for subcategory in subcategories:
+                subcategory_key = normalized_label_key(str(subcategory))
+                if subcategory_key:
+                    owner_map[(category_key, subcategory_key)] = owner_text
 
     return owner_map
 
 
-def owner_from_goals_map(category: str | None, subcategory: str | None, owner_map: dict[tuple[str, str | None], str]) -> str | None:
-    """Resolve an owner from GOALS.md using category/subcategory fallback matching."""
+def owner_from_category_owner_map(category: str | None, subcategory: str | None, owner_map: dict[tuple[str, str | None], str]) -> str | None:
+    """Resolve an owner from the category reference using category/subcategory matching."""
     category_key = normalized_label_key(category)
     subcategory_key = normalized_label_key(subcategory)
     if not category_key:
@@ -166,7 +158,8 @@ def session_publish_metadata(session_root: Path, combined_source: Path) -> dict[
     categories: list[str] = []
     subcategories: list[str] = []
     owner_lookup_source = "packet_identity"
-    goals_owner_map = parse_goals_owner_map(goals_path_from_env_or_default())
+    owner_reference_path = category_owner_reference_path_from_env_or_default()
+    category_owner_map = parse_category_owner_reference(owner_reference_path)
 
     for packet_path in packet_paths_for_session(session_root):
         packet = read_json(packet_path)
@@ -175,9 +168,9 @@ def session_publish_metadata(session_root: Path, combined_source: Path) -> dict[
         subcategory = identity.get("subcategory") or ""
         owner = identity.get("category_owner") or identity.get("owner") or ""
         if not owner:
-            owner = owner_from_goals_map(category, subcategory, goals_owner_map) or ""
+            owner = owner_from_category_owner_map(category, subcategory, category_owner_map) or ""
             if owner:
-                owner_lookup_source = "goals_markdown_fallback"
+                owner_lookup_source = "category_owner_reference"
         owners.append(owner)
         categories.append(category)
         subcategories.append(subcategory)
@@ -202,7 +195,7 @@ def session_publish_metadata(session_root: Path, combined_source: Path) -> dict[
         "category_values": unique_nonempty_texts(categories),
         "subcategory_values": unique_nonempty_texts(subcategories),
         "owner_lookup_source": owner_lookup_source,
-        "goals_path": str(goals_path_from_env_or_default()),
+        "category_owner_reference_path": str(owner_reference_path),
     }
 
 

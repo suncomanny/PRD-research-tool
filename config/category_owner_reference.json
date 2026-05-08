@@ -1,0 +1,120 @@
+{
+  "Stephanie": [
+    {
+      "category": "Highbays + Lowbays",
+      "subcategories": [
+        "UFO",
+        "Linears"
+      ]
+    },
+    {
+      "category": "Recessed",
+      "subcategories": [
+        "Slims",
+        "Retros",
+        "Cans",
+        "Rough ins"
+      ]
+    },
+    {
+      "category": "Grow lights",
+      "subcategories": []
+    },
+    {
+      "category": "Commercial",
+      "subcategories": []
+    },
+    {
+      "category": "Residential",
+      "subcategories": []
+    }
+  ],
+  "Jesse": [
+    {
+      "category": "Bulbs + Tubes",
+      "subcategories": []
+    },
+    {
+      "category": "LED ready fixtures",
+      "subcategories": []
+    },
+    {
+      "category": "Outdoor commercial",
+      "subcategories": [
+        "Wall packs",
+        "Flood lights",
+        "Commercial Landscape",
+        "Outdoor security",
+        "Area lights",
+        "Canopy",
+        "Sport lights",
+        "Commercial security"
+      ]
+    },
+    {
+      "category": "Outdoor fixtures",
+      "subcategories": [
+        "Solar",
+        "Residential Security",
+        "Residential landscape",
+        "String lights",
+        "Outdoor ceiling",
+        "Well lights"
+      ]
+    },
+    {
+      "category": "Electrical",
+      "subcategories": [
+        "Wire",
+        "Low voltage transformers",
+        "Wire connectors",
+        "Sensors",
+        "Dimmers"
+      ]
+    },
+    {
+      "category": "Bathroom Fans",
+      "subcategories": []
+    },
+    {
+      "category": "Residential Fans",
+      "subcategories": []
+    },
+    {
+      "category": "Commercial Fans",
+      "subcategories": []
+    }
+  ],
+  "Manny": [
+    {
+      "category": "Indoor Commercial",
+      "subcategories": [
+        "Panels",
+        "Emergency"
+      ]
+    },
+    {
+      "category": "Industrial",
+      "subcategories": [
+        "Striplights",
+        "Vaportights",
+        "Wraparounds",
+        "Explosion proof",
+        "Clean room lighting"
+      ]
+    },
+    {
+      "category": "Indoor Residential",
+      "subcategories": [
+        "Ceiling fixtures",
+        "Lamps",
+        "Chandeliers",
+        "Pendants",
+        "Wall Sconces",
+        "Vanity",
+        "Under cabinet",
+        "Tape/rope light"
+      ]
+    }
+  ]
+}
