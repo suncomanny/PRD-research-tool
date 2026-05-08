@@ -1,4 +1,4 @@
-"""
+﻿"""
 Step 3: Parse the PRD research template and attach Reference SKU context.
 
 Usage:
@@ -28,7 +28,7 @@ from sku_lookup import build_mcp_queries, lookup_from_csv, merge_postgres_data
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parent
 SHARED_TEMPLATE_ROOT = Path(
-    r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates"
+    r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Templates"
 )
 REPO_TEMPLATE_ROOT = REPO_ROOT / "templates"
 DEFAULT_WORKBOOK = (

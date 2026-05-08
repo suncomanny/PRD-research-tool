@@ -1,4 +1,4 @@
----
+﻿---
 planStatus:
   planId: plan-prd-research-tool
   title: "PRD Research Tool - Ideation Template + Competitive Research Engine"
@@ -19,18 +19,18 @@ planStatus:
 
 | Decision | Answer |
 |----------|--------|
-| **Input format** | Excel (.xlsx) with dropdowns/validation — lives on SharePoint |
+| **Input format** | Excel (.xlsx) with dropdowns/validation â€” lives on SharePoint |
 | **Multiple ideations** | Yes, multiple rows per template, same category per batch |
-| **Output format** | Excel (.xlsx) — **one sheet per ideation** with custom-tailored layout |
+| **Output format** | Excel (.xlsx) â€” **one sheet per ideation** with custom-tailored layout |
 | **Output delivery** | SharePoint: `Manny Tools/Research Reports/` |
 | **Vendor identification** | Redshift/Postgres MCP query (not CSV lookup) |
 | **Reference anchor fallback** | If Postgres payloads are unavailable, use local metadata variant price plus local Shopify/Amazon sales exports as a clearly labeled fallback source |
-| **Research depth** | All 6 known competitors + Amazon/Home Depot/Walmart — users accept wait time |
+| **Research depth** | All 6 known competitors + Amazon/Home Depot/Walmart â€” users accept wait time |
 | **Repo** | `suncomanny/PRD-research-tool` (private, GitHub) |
 | **Project location** | `Claude Workbook/PRD-research-tool/` (separate from main workspace) |
 | **Runtime** | Node.js (matching PRD Generator pattern: `xlsx` + `docx` npm packages + SharePoint Graph API) |
-| **Stackline integration** | Yes — PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context, preserves retailer-scoped bundles side by side for channel comparison, and falls back to web collection if a matching segment file is missing |
-| **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\` |
+| **Stackline integration** | Yes â€” PM exports from Atlas, renames per convention, uploads to SharePoint. Tool expects Stackline by default for Amazon/Home Depot market context, preserves retailer-scoped bundles side by side for channel comparison, and falls back to web collection if a matching segment file is missing |
+| **Stackline local path** | `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Stackline Data\` |
 | **Stackline naming convention** | Preferred: `Stackline_[StacklineSegment]_[YYYY-MM]_[type].csv` (type = summary, traffic, or sales). Fallback: valid Stackline CSVs can still be discovered by schema, segment label, and retailer scope when teammates upload inconsistent filenames. |
 
 ---
@@ -43,7 +43,7 @@ planStatus:
 
 **Current State:** PMs manually research competitors per product. No standardized ideation input. Research findings don't feed into PRD Generator.
 
-**Desired State:** PM fills Excel template → runs tool → gets research workbook → uses findings to fill PRD Generator Template → generates PRDs.
+**Desired State:** PM fills Excel template â†’ runs tool â†’ gets research workbook â†’ uses findings to fill PRD Generator Template â†’ generates PRDs.
 
 ---
 
@@ -51,27 +51,27 @@ planStatus:
 
 ```
 SharePoint: Manny Tools/
-├── PRD Research/
-│   ├── PRD Research Template.xlsx           ← PM FILLS THIS (one row per ideation)
-│   ├── Research Reports/
-│   │   └── [Category] Research [Date].xlsx  ← TOOL OUTPUTS (one sheet per ideation)
-│   └── Stackline Data/                      ← PM UPLOADS ATLAS EXPORTS HERE
-│       ├── Stackline_Ceiling_Panels_2026-04_summary.csv
-│       ├── Stackline_Ceiling_Panels_2026-04_traffic.csv
-│       └── Stackline_Ceiling_Panels_2026-04_sales.csv
-├── PRD Generator Template.xlsx              ← EXISTING (PM fills next, informed by research)
-└── Generated PRDs/                          ← EXISTING PRD outputs
+â”œâ”€â”€ PRD Research/
+â”‚   â”œâ”€â”€ PRD Research Template.xlsx           â† PM FILLS THIS (one row per ideation)
+â”‚   â”œâ”€â”€ Research Reports/
+â”‚   â”‚   â””â”€â”€ [Category] Research [Date].xlsx  â† TOOL OUTPUTS (one sheet per ideation)
+â”‚   â””â”€â”€ Stackline Data/                      â† PM UPLOADS ATLAS EXPORTS HERE
+â”‚       â”œâ”€â”€ Stackline_Ceiling_Panels_2026-04_summary.csv
+â”‚       â”œâ”€â”€ Stackline_Ceiling_Panels_2026-04_traffic.csv
+â”‚       â””â”€â”€ Stackline_Ceiling_Panels_2026-04_sales.csv
+â”œâ”€â”€ PRD Generator Template.xlsx              â† EXISTING (PM fills next, informed by research)
+â””â”€â”€ Generated PRDs/                          â† EXISTING PRD outputs
 
 Local sync: C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\
-  (tool reads Stackline files from local sync — no Graph API needed for read)
+  (tool reads Stackline files from local sync â€” no Graph API needed for read)
 ```
 
 **Flow:**
-1. PM has ideation(s) → fills out PRD Research Template.xlsx (one row per product)
+1. PM has ideation(s) â†’ fills out PRD Research Template.xlsx (one row per product)
 2. PM asks Claude: "run research for [category]"
 3. Tool downloads template from SharePoint via Graph API
 4. For each ideation row:
-   a. Look up Sunco Reference SKU via Redshift/Postgres MCP → pull vendor, cost, specs
+   a. Look up Sunco Reference SKU via Redshift/Postgres MCP â†’ pull vendor, cost, specs
    b. Enrich with metadata/specs CSVs for any gaps
    c. Research competitors (Competitors.md + Amazon/HD/Walmart) via WebFetch/WebSearch
    d. Analyze: pricing targets, spec recommendations, competitor ranking
@@ -83,7 +83,7 @@ Local sync: C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\
    - Spec recommendations ("increase lumens +15% to beat 8/10 competitors")
    - PRD Generator pre-fill summary
 6. Tool uploads workbook to SharePoint `Research Reports/`
-7. PM reviews → fills PRD Generator Template → generates PRDs
+7. PM reviews â†’ fills PRD Generator Template â†’ generates PRDs
 
 ---
 
@@ -92,7 +92,7 @@ Local sync: C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\
 ### Design Principles
 - **Category-agnostic:** One template for all 42 subcategories
 - **Not every field required:** PM fills what they know; Reference SKU fills gaps
-- **Reference SKU drives lookup:** Sunco or internal vendor SKU → DB query → auto-populate
+- **Reference SKU drives lookup:** Sunco or internal vendor SKU â†’ DB query â†’ auto-populate
 
 ### Template Columns
 
@@ -161,14 +161,14 @@ Local sync: C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\
 |--------|-------------|-----------|
 | Known Competitors | Specific competitor products to compare | Optional |
 | Priority Channels | Amazon, Home Depot, Walmart, Direct | Optional |
-| Stackline Data? | Yes/No — triggers lookup for Stackline Atlas CSV bundle for that subcategory/segment | Optional |
+| Stackline Data? | Yes/No â€” triggers lookup for Stackline Atlas CSV bundle for that subcategory/segment | Optional |
 | Research Notes | Context for the research tool | Optional |
 
 ---
 
 ## Part B: Excel Output (Research Report Workbook)
 
-### One Sheet Per Ideation — Layout
+### One Sheet Per Ideation â€” Layout
 
 Each sheet is named after the ideation (e.g., "Panel 2x4 50W Selectable")
 
@@ -200,7 +200,7 @@ For each relevant attribute:
 - Impact assessment ("beats X of Y competitors")
 
 #### Section F: PRD Generator Pre-Fill
-Maps directly to PRD Generator Template columns — ready to copy/paste:
+Maps directly to PRD Generator Template columns â€” ready to copy/paste:
 - Name, Voltage, Wattages, CCTs, CRI, Dimming, Certifications, etc.
 
 ---
@@ -215,7 +215,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [ ] Git checkpoint: "Step 1 - Ideation template created"
 
 ### Step 2: Reference SKU Lightweight Lookup
-**Goal:** Script that takes a Reference SKU and returns only what's needed — the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We use it primarily as a category / feature-schema anchor and only secondarily as a light commercial sanity check. We only pull baseline context, not full specs.
+**Goal:** Script that takes a Reference SKU and returns only what's needed â€” the Reference SKU is a *similar* existing product (inspiration), not the new product itself. We use it primarily as a category / feature-schema anchor and only secondarily as a light commercial sanity check. We only pull baseline context, not full specs.
 
 **Fallback behavior:** Postgres MCP remains the preferred source for current listing price and last-12-month channel sales, but the tool can now fall back to local metadata + Shopify/Amazon sales exports when MCP payloads are unavailable. Fallback values must stay clearly labeled in the report.
 - A batch helper now generates one Postgres MCP query bundle plus a merge-ready payload template for all unique reference SKUs in a workbook/session, so true DB enrichment can be applied in one rerun instead of by hand per row.
@@ -229,16 +229,16 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 |------|--------|-----|
 | Product image URL | Metadata CSV (`Image Src`) | Placeholder image for the final PRD document (PM can swap later) |
 | Current selling price | Postgres (`pricing_listingprice`) | Baseline: "our similar product sells at $X" |
-| Shopify sales (12mo) | Postgres (channel 12585 — revenue, units) | DTC channel performance, always separate |
-| Amazon sales (12mo) | Postgres (channel 11929 — revenue, units) | Marketplace channel performance, always separate |
+| Shopify sales (12mo) | Postgres (channel 12585 â€” revenue, units) | DTC channel performance, always separate |
+| Amazon sales (12mo) | Postgres (channel 11929 â€” revenue, units) | Marketplace channel performance, always separate |
 | Product title + category | Metadata CSV | Validates the SKU and gives research engine search context |
 
-**What we do NOT pull:** Full spec sheet, vendor cost/margin, cascading attribute extraction — PM already entered target specs on the template.
+**What we do NOT pull:** Full spec sheet, vendor cost/margin, cascading attribute extraction â€” PM already entered target specs on the template.
 
-**Important:** Shopify and Amazon are different customer segments — always report them as separate line items, never combined.
+**Important:** Shopify and Amazon are different customer segments â€” always report them as separate line items, never combined.
 
 **Tasks:**
-- [ ] Read metadata CSV → match Reference SKU → return image URL, title, category
+- [ ] Read metadata CSV â†’ match Reference SKU â†’ return image URL, title, category
 - [ ] Query Postgres for listing price + 12mo sales split by channel (Shopify + Amazon separately)
 - [ ] Return simple object: `{ image_url, title, category, price, shopify_revenue, shopify_units, amazon_revenue, amazon_units }`
 - [ ] Handle "SKU not found" gracefully (flag in output)
@@ -247,8 +247,8 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 
 ### Step 3: Template Parser + Enrichment
 **Goal:** Script that reads filled Excel, attaches Reference SKU lookup data, and prepares ideation objects for research
-- [ ] Read Excel rows (openpyxl / xlsx) → parse all columns per row
-- [ ] For each row: run Step 2 lookup → attach image, price, sales context
+- [ ] Read Excel rows (openpyxl / xlsx) â†’ parse all columns per row
+- [ ] For each row: run Step 2 lookup â†’ attach image, price, sales context
 - [ ] User-entered specs are the *target* specs (not overwritten by reference data)
 - [ ] Output: list of enriched ideation objects ready for competitive research
 - [ ] Git checkpoint: "Step 3 - Template parser working"
@@ -273,7 +273,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
   - Session tooling also exposes raw-artifact repair so Codex can salvage partially successful collection runs instead of blocking on Claude retries
   - A shared `STEP4_PROMPT.md` template defines the `1 row x 1 channel` raw-collection workflow
 - [ ] **Stackline integration:** Treat Stackline as the default Amazon / Home Depot market-intelligence layer unless a row explicitly opts out:
-  - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data\`
+  - Read from local sync: `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Stackline Data\`
   - Match files by Stackline segment label / alias: prefer `Stackline_[StacklineSegment]_*.csv`, but fall back to CSV schema sniffing when filenames are inconsistent
   - Pick newest by inferred YYYY-MM period; use filename when available, otherwise infer the period from export dates inside the CSV
   - Parse `_summary` CSV as the primary source for product-level revenue, units, price, brand share, and competitor ranking
@@ -305,9 +305,9 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 - [x] Build a combined workbook with a summary sheet plus one sheet per completed ideation
 - [x] Add a top-level local orchestrator (`tools/research_orchestrator.py`) that wraps prepare / refresh / finalize / status workflow phases
 - [ ] Generate .xlsx with one sheet per ideation (sections A-F)
-- [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) — PM can swap before generating
+- [ ] Include Reference SKU image URL in PRD Generator pre-fill (Section F) â€” PM can swap before generating
 - [ ] Style: brand colors, headers, conditional formatting
-- [x] Publish completed reports into the locally synced SharePoint `PRD Research\Research Reports\` folder
+- [x] Publish completed reports into the locally synced SharePoint `PRD Research\Working Tool Files\Research Reports\` folder
 - [ ] Upload to SharePoint via Graph API
 - [ ] Create SKILL.md definition (matching PRD Generator pattern)
 - [ ] Test end-to-end with real ideations

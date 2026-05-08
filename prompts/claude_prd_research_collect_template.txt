@@ -1,4 +1,4 @@
-PRD Research Collect
+﻿PRD Research Collect
 
 Do not edit repo code.
 Do not change templates.
@@ -13,13 +13,13 @@ Use these exact paths:
 - Session root:
   {{SESSION_ROOT}}
 - Shared Stackline root:
-  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Stackline Data
 - Shared template:
-  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Templates\PRD_Research_Template.xlsx
 - Resource root:
   C:\Users\Sunco\OneDrive - Sunco Lighting\Documents\Claude Workbook\Manny Sunco\Resources
 - Shared reports root:
-  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Research Reports
+  C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Research Reports
 - Category owner mapping:
   C:\Users\Sunco\Projects\PRD-research-tool\config\category_owner_reference.json
 

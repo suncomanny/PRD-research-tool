@@ -1,4 +1,4 @@
-# PRD Research Operator Workflow
+﻿# PRD Research Operator Workflow
 
 This is the current Codex-priority, lowest-token operating model for running PRD Research.
 
@@ -15,11 +15,11 @@ Use these exact phrases with Codex / Claude:
 ## Canonical Paths
 
 - Shared template:
-  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx`
+  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Templates\PRD_Research_Template.xlsx`
 - Shared reports:
-  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Research Reports`
+  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Research Reports`
 - Shared session root:
-  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\output\research_sessions`
+  - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\output\research_sessions`
 
 ## Step 1. User
 

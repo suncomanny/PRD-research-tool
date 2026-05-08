@@ -1,4 +1,4 @@
-"""
+﻿"""
 Analyze Stackline exports for a subcategory or segment.
 
 Primary inputs:
@@ -26,7 +26,7 @@ from sku_lookup import strip_pack_suffix
 
 
 STACKLINE_DIR = Path(
-    r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Stackline Data"
+    r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Stackline Data"
 )
 STACKLINE_FILE_RE = re.compile(
     r"^Stackline_(?P<segment>.+)_(?P<period>\d{4}-\d{2})_(?P<kind>summary|traffic|sales)\.csv$",

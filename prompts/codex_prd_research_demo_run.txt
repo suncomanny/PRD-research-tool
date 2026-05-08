@@ -1,7 +1,7 @@
-PRD Research Demo Run
+﻿PRD Research Demo Run
 
 Use only the latest shared template at:
-C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx
+C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Templates\PRD_Research_Template.xlsx
 
 This is a demo run. Treat the current template as the source of truth and assume the output/report folders may have been intentionally cleaned before the run.
 

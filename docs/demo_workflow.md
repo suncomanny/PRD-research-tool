@@ -1,4 +1,4 @@
-# PRD Research Demo Workflow
+﻿# PRD Research Demo Workflow
 
 This is the demo-safe operator path for showing the PRD Research Tool to the team.
 
@@ -21,7 +21,7 @@ PRD Research Demo Run
 ## Demo Rules
 
 1. Always use the latest shared template:
-   - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Templates\PRD_Research_Template.xlsx`
+   - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Templates\PRD_Research_Template.xlsx`
 2. Treat the current shared template as the only source of truth.
 3. Assume the reports/output folder may have been intentionally cleaned before the demo.
 4. Create a fresh session for the run.
@@ -29,7 +29,7 @@ PRD Research Demo Run
 6. Only escalate to Claude if Codex confirms that missing raw competitor collection is the actual blocker.
 7. Do not ask the user to touch PowerShell.
 8. Return a final workbook path that can be opened immediately in:
-   - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Research Reports`
+   - `C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files\Research Reports`
 
 ## Expected Codex Behavior
 

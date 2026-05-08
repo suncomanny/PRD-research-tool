@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_SYNC_ROOT = Path(r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research")
+DEFAULT_SYNC_ROOT = Path(r"C:\Users\Sunco\Sunco Lighting\Product - Manny Tools\PRD Research\Working Tool Files")
 DEFAULT_REPORTS_DIRNAME = "Research Reports"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CATEGORY_OWNER_REFERENCE_PATH = REPO_ROOT / "config" / "category_owner_reference.json"
