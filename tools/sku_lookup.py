@@ -1,17 +1,18 @@
 """
 Reference SKU Lightweight Lookup — Step 2
 Looks up baseline context for a Reference SKU:
-  - Product image URL (from metadata CSV)
-  - Product title (from metadata CSV, Postgres backup)
-  - Current listing price (from Postgres via MCP)
+  - Product image URL (from legacy metadata CSV until DB image mapping is wired)
+  - Product title (from Postgres via MCP, with legacy metadata/sales fallback)
+  - Current listing price (from Postgres via MCP, with legacy metadata fallback)
   - 12-month sales split by channel (Shopify vs Amazon, from Postgres via MCP)
 
 Usage:
   python sku_lookup.py <sku>                     # Image + title from CSV only
   python sku_lookup.py <sku> --with-sales <json>  # Merge in Postgres sales data
 
-The Postgres queries are executed by Claude via MCP and passed in as --with-sales JSON.
-This script handles the CSV-based lookups and merges everything into a final JSON output.
+The Postgres queries are executed via MCP and passed in as --with-sales JSON.
+CSV files are legacy FY2025/offline fallback sources only and should not be
+treated as current sales data.
 """
 
 import argparse
@@ -34,12 +35,32 @@ RESOURCES_DIR = os.path.join(
     "Manny Sunco",
     "Resources",
 )
-METADATA_FILE = "SUNCO ALL METADATA.csv"
-SHOPIFY_SALES_FILE = "SUNCO 2025 ALL SALES Shopify - Categorized.csv"
-AMAZON_SALES_FILE = "FULL SUNCO 2025 SALES Amazon.csv"
-LOCAL_SALES_PERIOD_LABEL = "FY2025 local export fallback"
+METADATA_FILE = "LEGACY_FALLBACK_SUNCO_METADATA.csv"
+SHOPIFY_SALES_FILE = "LEGACY_FALLBACK_FY2025_SHOPIFY_SALES.csv"
+AMAZON_SALES_FILE = "LEGACY_FALLBACK_FY2025_AMAZON_SALES.csv"
+LEGACY_RESOURCE_FILENAMES = {
+    METADATA_FILE: "SUNCO ALL METADATA.csv",
+    SHOPIFY_SALES_FILE: "SUNCO 2025 ALL SALES Shopify - Categorized.csv",
+    AMAZON_SALES_FILE: "FULL SUNCO 2025 SALES Amazon.csv",
+}
+LOCAL_SALES_PERIOD_LABEL = "Legacy FY2025 local export fallback"
 MIN_POSTGRES_PRICE_RATIO = 0.5
 MAX_POSTGRES_PRICE_RATIO = 2.5
+
+
+def resolve_resource_path(filename: str) -> str:
+    """Resolve a resource file path, preferring clear legacy-fallback names."""
+    preferred_path = os.path.join(RESOURCES_DIR, filename)
+    if os.path.exists(preferred_path):
+        return preferred_path
+
+    legacy_name = LEGACY_RESOURCE_FILENAMES.get(filename)
+    if legacy_name:
+        legacy_path = os.path.join(RESOURCES_DIR, legacy_name)
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+    return preferred_path
 
 
 def strip_pack_suffix(sku: str) -> str:
@@ -131,7 +152,7 @@ def should_accept_postgres_listing_price(
 @lru_cache(maxsize=1)
 def load_metadata() -> pd.DataFrame:
     """Load metadata CSV and add family + pack columns."""
-    path = os.path.join(RESOURCES_DIR, METADATA_FILE)
+    path = resolve_resource_path(METADATA_FILE)
     if not os.path.exists(path):
         print(f"ERROR: Metadata file not found: {path}", file=sys.stderr)
         sys.exit(1)
@@ -147,7 +168,7 @@ def load_metadata() -> pd.DataFrame:
 @lru_cache(maxsize=1)
 def load_shopify_sales() -> pd.DataFrame:
     """Load Shopify sales export and normalize SKU family columns."""
-    path = os.path.join(RESOURCES_DIR, SHOPIFY_SALES_FILE)
+    path = resolve_resource_path(SHOPIFY_SALES_FILE)
     if not os.path.exists(path):
         return pd.DataFrame()
 
@@ -173,7 +194,7 @@ def load_shopify_sales() -> pd.DataFrame:
 @lru_cache(maxsize=1)
 def load_amazon_sales() -> pd.DataFrame:
     """Load Amazon sales export and normalize SKU family columns."""
-    path = os.path.join(RESOURCES_DIR, AMAZON_SALES_FILE)
+    path = resolve_resource_path(AMAZON_SALES_FILE)
     if not os.path.exists(path):
         return pd.DataFrame()
 
@@ -245,14 +266,14 @@ def apply_local_fallbacks(result: dict, row: pd.Series | None) -> dict:
         variant_price = parse_currency_value(row.get('Variant Price'))
         if result.get('listing_price') is None and variant_price is not None:
             result['listing_price'] = variant_price
-            result['listing_price_source'] = 'metadata_variant_price'
+            result['listing_price_source'] = 'legacy_metadata_variant_price'
             fallback_used = True
 
         if not result.get('title'):
             title_from_handle = handle_to_title(result.get('handle'))
             if title_is_usable(title_from_handle):
                 result['title'] = title_from_handle
-                result['title_source'] = 'metadata_handle'
+                result['title_source'] = 'legacy_metadata_handle'
                 fallback_used = True
 
     shopify_summary = summarize_local_sales(
@@ -273,27 +294,27 @@ def apply_local_fallbacks(result: dict, row: pd.Series | None) -> dict:
     local_title = shopify_summary.get('title') or amazon_summary.get('title')
     if local_title and (
         not title_is_usable(result.get('title'))
-        or result.get('title_source') == 'metadata_handle'
+        or result.get('title_source') == 'legacy_metadata_handle'
     ):
         result['title'] = local_title
-        result['title_source'] = 'local_sales_export'
+        result['title_source'] = 'legacy_fy2025_sales_export'
         fallback_used = True
 
     if result.get('shopify_revenue_12mo') is None and shopify_summary.get('revenue') is not None:
         result['shopify_revenue_12mo'] = shopify_summary['revenue']
         result['shopify_units_12mo'] = shopify_summary.get('units')
-        result['shopify_data_source'] = 'shopify_sales_csv'
+        result['shopify_data_source'] = 'legacy_fy2025_shopify_sales_csv'
         fallback_used = True
 
     if result.get('amazon_revenue_12mo') is None and amazon_summary.get('revenue') is not None:
         result['amazon_revenue_12mo'] = amazon_summary['revenue']
         result['amazon_units_12mo'] = amazon_summary.get('units')
-        result['amazon_data_source'] = 'amazon_sales_csv'
+        result['amazon_data_source'] = 'legacy_fy2025_amazon_sales_csv'
         fallback_used = True
 
     if fallback_used:
         result.setdefault('sales_period_label', LOCAL_SALES_PERIOD_LABEL)
-        result.setdefault('reference_data_source', 'local_metadata_and_sales_exports')
+        result.setdefault('reference_data_source', 'legacy_local_metadata_and_fy2025_sales_exports')
 
     return result
 

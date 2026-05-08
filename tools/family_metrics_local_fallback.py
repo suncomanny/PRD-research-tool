@@ -1,8 +1,8 @@
 """
-Backfill family-metrics payloads from local sales exports when Postgres is unavailable.
+Backfill family-metrics payloads from legacy local sales exports when Postgres is unavailable.
 
 This is intentionally narrow:
-- fills Amazon monthly sales rows from the FY2025 local Amazon export
+- fills Amazon monthly sales rows from the legacy FY2025 local Amazon export
 - does not attempt customer concentration
 - does not fabricate Shopify monthly history
 
@@ -68,7 +68,7 @@ def merge_monthly_rows(
 
 
 def build_amazon_monthly_rows(family: str) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
-    """Aggregate monthly Amazon revenue and units for a SKU family from local export data."""
+    """Aggregate monthly Amazon revenue and units for a SKU family from legacy local export data."""
     sales_df = load_amazon_sales()
     if sales_df.empty:
         return [], None
@@ -143,15 +143,15 @@ def enrich_payload_rows(payload_rows: list[dict[str, Any]]) -> tuple[list[dict[s
 
         existing_source = normalize_text(row.get("family_metrics_source"))
         if existing_source and existing_source != "POSTGRES_MCP":
-            row["family_metrics_source"] = "mixed_local_amazon_export_fallback"
+            row["family_metrics_source"] = "mixed_legacy_fy2025_amazon_export_fallback"
         else:
-            row["family_metrics_source"] = "local_amazon_export_fallback"
+            row["family_metrics_source"] = "legacy_fy2025_amazon_export_fallback"
 
         periods = row.setdefault("family_metrics_period_label", {})
         if not isinstance(periods, dict):
             periods = {}
             row["family_metrics_period_label"] = periods
-        periods["amazon_local_export_fallback"] = {
+        periods["legacy_fy2025_amazon_export_fallback"] = {
             "label": LOCAL_SALES_PERIOD_LABEL,
             "start_date": period["start_date"],
             "end_date": period["end_date"],
@@ -173,7 +173,7 @@ def enrich_payload_rows(payload_rows: list[dict[str, Any]]) -> tuple[list[dict[s
 
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
-    parser = argparse.ArgumentParser(description="Backfill family-metrics payloads from local Amazon sales export.")
+    parser = argparse.ArgumentParser(description="Backfill family-metrics payloads from legacy local Amazon sales export.")
     parser.add_argument("payload_json", help="Path to family_metrics_payload_template.json")
     parser.add_argument(
         "--output",

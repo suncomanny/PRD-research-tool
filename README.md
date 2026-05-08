@@ -77,5 +77,6 @@ cmd /c C:\Windows\py.exe C:\Users\Sunco\Projects\PRD-research-tool\tools\render_
 
 - Stackline is expected by default, but the workflow degrades gracefully when it is missing.
 - Some reference SKUs may have sparse history; this lowers evidence confidence but does not block the batch.
+- Postgres/Redshift should be treated as the current source of truth for sales, revenue, listing price, and family metrics. Legacy CSV files are fallback/offline aids only and are named with a `LEGACY_FALLBACK_` prefix.
 - SharePoint download/upload automation is still a separate future step.
 - SharePoint output publishing is currently implemented via the locally synced folder at `Product - Manny Tools\PRD Research\Research Reports`; Graph upload can be layered in later if needed.
