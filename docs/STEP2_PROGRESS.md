@@ -80,7 +80,7 @@ LIMIT 1
 ### Key Finding: Image Fallback Needed
 - `shopify_shopifymedia` only has images for products with ID >= 1333
 - Many established SKUs (panels, etc.) have no image in Postgres
-- **Solution:** Use metadata CSV (`SUNCO ALL METADATA.csv` → `Image Src` column) as fallback
+- **Solution:** Use legacy fallback metadata CSV (`LEGACY_FALLBACK_SUNCO_METADATA.csv` -> `Image Src` column) as fallback until image URLs are DB-backed
 - Script `tools/sku_lookup.py` already handles this
 
 ## What's Left to Do

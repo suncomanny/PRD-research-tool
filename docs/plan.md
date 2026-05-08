@@ -317,7 +317,7 @@ Maps directly to PRD Generator Template columns — ready to copy/paste:
 
 ## Dependencies
 
-- **Data:** Redshift/Postgres MCP, SUNCO ALL METADATA.csv, SUNCO ALL SPECS REFERENCE.csv, Stackline summary / traffic CSVs
+- **Data:** Redshift/Postgres MCP, `LEGACY_FALLBACK_SUNCO_METADATA.csv` as offline fallback, SUNCO ALL SPECS REFERENCE.csv, Stackline summary / traffic CSVs
 - **Tools:** PRD Generator skill (downstream consumer), xlsx npm package, Microsoft Graph API
 - **Research:** WebFetch, WebSearch, Competitors.md
 - **Infrastructure:** SharePoint drive, Node.js runtime
